@@ -247,6 +247,25 @@ Change one thing on the radio, read, `tools/dm32uv_diff.py old new`.
 |---|--------|--------|
 | 1 | TX power high → low (mode not recorded, probably VFO A) | VFO A `+18`: `04` → `00`. Tag 04 `+080`: `9e` → `9c`. Both pages moved; the old copies and 2 blank pages became tag 00. |
 | 2 | Same setting back to high | VFO A `+18`: `00` → `04` only. So tag 04 `+080` in test 1 was something else, not power. |
+| 3 | Renamed "channel 5" to `hello world`; appended ` analog` to channel 6's name | Ch 6 name → `Channel 6 analog`. **Record 13** (old name `Channel 13`) → `hello world`, not record 5, which is unchanged. Tag 5c header u16 at +3: 13 → 6 (line B's current channel?). Tag 04 `+080`: `9c` → `be`. VFO A frequency 434.33833 → 434.33583. Test 4 explains it: the rename went to the channel selected on the other display line (B, on channel 13). |
+| 4 | Controlled: only the upper line active, channel mode, Channel 3 renamed `TEST3` | Record 3 name → `TEST3`: **the radio's channel number is the record number**. Tag 5c +1: 6 → 3 (line A's current channel). Tag 04 `+080`: `be` → `9e`. |
+
+**Tag 04 byte 0x80** (seen in tests 1, 3, 4: `9e` → `9c` → `be` → `9e`) looks like the display state,
+not a setting. Bit 5 is probably the active line (1 = B, set when line B was edited in test 3)
+and bit 1 probably line A's channel/frequency mode (cleared when power was changed in VFO mode
+in test 1). To be checked against the CPS tag 04 accessors.
+
+### Zones (tag 0x5C)
+
+From data only, not yet checked against the CPS zone accessors:
+
+| Offset | Contents |
+|--------|----------|
+| 0x00 | Zone count (u8, `02` on the test radio), then u16 current channel for display line A (confirmed in test 4) and u16 current channel for line B (fits test 3) |
+| 0x10 + 0x91 × k | Zone k+1: 16-byte name (NUL-padded, then `ff`), u8 member count, 64 × u16 channel numbers (1-based, zero-filled). 145 bytes per zone. |
+
+Zone 1 ("Zone 1") holds channels 1–16 in order and zone 2 ("Func Demo") holds channels 17–25.
+Tags 0x5C–0x64 (9 pages) × 28 zones per page = 252, which fits the radio's 250 zones.
 
 ### Tag 0x02
 
