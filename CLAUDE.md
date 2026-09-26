@@ -66,9 +66,12 @@ as `Fixes #NNNN`.
 1. Settle the uncertain DMR channel fields (TX contact, RX group, encryption
    key) with keypad tests. (Done: the driver works in the stock CHIRP GUI via
    Help → Developer Mode, File → Load Module; download and channel names as expected.)
-2. Upload (MVP 2): write only channel pages back to the page holding each
-   tag, read every page back and compare, and have a restore path from a full
-   read first. Find out whether channels must be contiguous (1..count).
+2. Upload (MVP 2): the driver's do_upload and tools/dm32uv_write.py are written and
+   tested against tests/fake_dm32uv.py. On the radio: full backup in
+   backup-2026-09-26/ (all 200 pages), and a no-op write of page tag 0x13 worked,
+   with the re-read identical to the backup. Next: a real edit (rename one channel through the
+   driver's upload), then enable UPLOAD_ENABLED. Still to find out: must
+   channels be contiguous (1..count)?
 3. Settings page (tag 0x04) from the CPS accessors (`re/BufRefs.java`,
    `re/DecompRefs.java`), then contacts/RX groups/zones.
 4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com

@@ -318,6 +318,13 @@ reproduce: `re/fw_disasm.sh` (needs csky-elf binutils, see the script).
 written page back and compare; keep the tag byte at 0xFFF; stop sending when done
 and let the 2 s timeout end the session.
 
+**First write (2026-09-26).** Before it, a backup of all 200 codeplug pages
+(`dm32uv_read.py --all-pages`). Then `dm32uv_write.py --noop 13`: one `W 00 50 01 00 10` + 4096
+bytes, rewriting page 0x015000 (tag 0x13) with its own contents. The radio answered `06`
+at once, the read-back matched first time, and the tags were unchanged. A full re-read afterwards
+was byte for byte identical to the backup in all 200 pages. So `W` behaves as the firmware
+analysis says, and the page stays where it was.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
