@@ -371,6 +371,12 @@ time slot 2, uploaded from the GUI. The diff was exactly `+1d` `01` → `11`, `+
 `00` → `02`, in place, and the radio showed all three. (The same diff held a VFO B change and a
 line-B position change made on the radio, and the G block had changed too.)
 
+**Zone created from CHIRP (2026-09-26).** Channel 1 put in the spare "New zone" bank and
+uploaded: zone count 2 → 3, zone 3 = "Zone 3" with channel 1; the radio lists it (select it
+with the zone switch). The same re-read showed the radio had **cleaned up its stale pages**:
+pages in use fell from 191 to 71, and the zone page had moved. The radio reclaims stale
+(tag 0x00) pages by itself at some point.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
