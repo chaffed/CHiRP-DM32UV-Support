@@ -178,13 +178,66 @@ earlier note here described the pages as a continuous stream. That was wrong: it
 agreed with this layout only on page 0, where all 25 channels are. VFO B's
 record ends at 0xFFE, just before the tag byte. Known fields, as offsets from the start of the record:
 
-| Offset | Size | Field |
-|--------|------|-------|
-| 0x00 | 16 | Name, ASCII, NUL-padded (`Channel 1`) |
-| 0x10 | 4 | RX frequency, BCD little-endian, 10 Hz units (`50 12 00 43` = 430.01250 MHz) |
-| 0x14 | 4 | TX frequency, same format |
-| 0x18 | 1 | Flags. Bit 2 (`0x04`) is probably TX power, 1 = high (keypad test 1). Channels have `0x14`. |
-| 0x19 | 23 | Unknown. Example: `00 00 00 34 01 00 01 00 ff ff ff ff 00 …` |
+Field map from the CPS channel accessors (`0x47dc50`–`0x482530`, one
+getter and one setter per field). Labels come from the channel dialog
+`0x4121c0`: which language section fills each combo box, or which
+checkbox control ID (looked up in `[Resource]`) each value goes to. Value lists are the
+sections of the CPS language file (installer file `10`). **Check** says what
+confirms the field: *keypad* = changed on the radio and seen in a diff; *data* =
+consistent with all 25 channels on the test radio, e.g. a channel named "DTMF Call"
+has signaling type DTMF; *CPS* = accessor and dialog only.
+
+| Offset | Bits | Field | Values | Check |
+|--------|------|-------|--------|-------|
+| 0x00 | 16 bytes | Name | ASCII, NUL-padded; all `ff` = no name | data |
+| 0x10 | 4 bytes | RX frequency | 8-digit BCD, little-endian, 10 Hz units; `ff`×4 = empty | data |
+| 0x14 | 4 bytes | TX frequency | same | data |
+| 0x18 | 7–4 | Channel type | 0 Analog, 1 Digital, 2 Fixed Analog, 3 Fixed Digital `[ChannelMode]` | data |
+| 0x18 | 3 | Forbid TX | checkbox | CPS |
+| 0x18 | 2–1 | Power | 0 Low, 1 Middle, 2 High `[PowerSelect]`, stored as `bits >> 1` (so `0x04` = High) | keypad |
+| 0x18 | 0 | Lone Work | checkbox | CPS |
+| 0x19 | 7 | Bandwidth | 0 12.5 kHz, 1 25 kHz | data |
+| 0x19 | 6 | Auto Scan | checkbox | CPS |
+| 0x19 | 5–0 | Scan list | 0 none, n = scan list n (names from tag 0x11) | CPS |
+| 0x1A | 7 | Forbid Talkaround | checkbox | CPS |
+| 0x1A | 6–4 | TX admit | analog: 0 Allow TX, 1 Channel Idle, 2 Match CTC, 3 Non Match CTC; digital: 0 Always, 1 Channel Idle, 2 Color Code Idle | CPS |
+| 0x1A | 2 | APRS Receive | checkbox | data |
+| 0x1A | 1–0 | VFO only: repeater offset direction | 0 none, 1 +, 2 − `[PinCha]` | CPS |
+| 0x1B | 7 | Emergency Indicator | checkbox | data |
+| 0x1B | 6 | Emergency ACK | checkbox | data |
+| 0x1B | 4–0 | Emergency system (digital) | 0 none, n = entry n (list from tag 0x10) | data |
+| 0x1C | 7–4 | Squelch level | 0–9 | data (all 3) |
+| 0x1C | 3–2 | APRS report type | 0 Off, 1 Digital `[ChannelAprsReport]` | data |
+| 0x1C | 1 | Analog APRS PTT mode | checkbox | CPS |
+| 0x1C | 0 | Digital APRS PTT mode | checkbox | CPS |
+| 0x1D | 7 | Private Confirm | checkbox | CPS |
+| 0x1D | 6 | Short Data Confirm | checkbox | CPS |
+| 0x1D | 5 | TDMA Direct Mode | checkbox. The channel named "TDMA Direct Mode" does not have it set. | CPS |
+| 0x1D | 4 | Time slot | 0 Slot 1, 1 Slot 2 | CPS |
+| 0x1D | 3–0 | Color code | 0–15 | data |
+| 0x1E | byte | Probably encryption key | 0 none, n = entry n (list from tag 0x10). Set to 1 on "Digital Encrypt". Could also be TX contact. | data? |
+| 0x1F | 6 | Encryption | checkbox | data |
+| 0x1F | 5–0 | Probably RX group list | 0 none, n = list n (names from tag 0x0F). 1 on all digital channels. | data? |
+| 0x20 | byte | Unknown, 1–8 in the dialog (maybe APRS report channel) | index 0–7 | CPS |
+| 0x21 | 2 bytes | CTC/DCS decode | see tones below | CPS |
+| 0x23 | 2 bytes | CTC/DCS encode | see tones below | CPS |
+| 0x25 | 5 | Compander | checkbox | CPS |
+| 0x25 | 4 | VOX | checkbox | CPS |
+| 0x25 | 3–0 | Unknown: Off, 1–4 (maybe scramble) | | CPS |
+| 0x26 | 7 | PTT ID Display | checkbox | CPS |
+| 0x26 | 6–4 | RX squelch mode | 0 Carrier/CTC, 1 Optional Signaling, 2 CTC & Opt., 3 CTC or Opt. | data |
+| 0x26 | 3–1 | Signaling type | 0 None, 1 DTMF, 2 Two Tone, 3 Five Tone, 4 BDC1200 | data |
+| 0x27 | 7–4, 3–0 | Signaling code selections, depending on signaling type (`0x414470`) | | CPS |
+| 0x29 | 7–4 | Step | 2.5, 5, 6.25, 10, 12.5, 25, 50, 100 kHz `[ChannelStepFreq]` | CPS |
+| 0x29 | 3–2 | PTT ID | 0 Off, 1 BOT, 2 EOT, 3 Both `[ChannelPttId]` | data |
+| 0x2A | byte | Unknown, 1–8 in the dialog | index 0–7 | CPS |
+| 0x2B | byte | Unknown list from tag 0x67 (up to 250 entries). Maybe TX contact. | | CPS |
+| 0x2C | 4 bytes | VFO only: repeater offset, BCD like the frequencies | | CPS |
+
+**Tones** (0x21, 0x23), two bytes; the second holds the flags:
+`ff ff` = none. CTCSS: tenths of a Hz as 4 BCD digits, little-endian
+(88.5 Hz → `85 08`). DCS: byte 1 = `0x80` (normal) or `0xC0` (inverted) OR'd with the
+first octal digit, byte 0 = the other two digits (D023N → `23 80`, D754I → `54 c7`).
 
 ### Keypad tests
 
