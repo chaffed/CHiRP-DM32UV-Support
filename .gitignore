@@ -1,0 +1,12 @@
+# Vendor software and anything derived from it: not ours to publish
+*.exe
+re/ghidra_proj/
+re/*.c
+
+# Radio dumps may contain personal data (radio ID, contacts)
+probe*/
+dump*/
+
+__pycache__/
+*.pyc
+.DS_Store
