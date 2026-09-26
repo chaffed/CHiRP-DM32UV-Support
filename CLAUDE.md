@@ -54,11 +54,12 @@ as `Fixes #NNNN`.
   read-back verification. Never send anything at a baud rate other than 115200: the radio
   hangs until power-cycled. After a normal session no power cycle is needed: the radio
   ends the session after 2 s idle and returns to its home screen by itself.
-- **Read-only CHIRP driver works** (`driver/baofeng_dm32uv.py`): a real
-  download matched the read tool's dump byte for byte. It passes CHIRP's
+- **CHIRP driver works, download and upload** (`driver/baofeng_dm32uv.py`): a real
+  download matched the read tool's dump byte for byte; upload writes only changed
+  channel pages and verifies each (see PROTOCOL.md "First real edit"). It passes CHIRP's
   driver tests, flake8 and mypy (run from `../chirp` with the driver and an
   image symlinked into `chirp/drivers/` and `tests/images/`), and works in the
-  stock CHIRP GUI as a loaded module. Upload is refused.
+  stock CHIRP GUI as a loaded module (download tested there; upload not yet from the GUI).
 - Tags 0x02 and 0x69 look like band limits and calibration. Never write them.
 
 ## Next steps
@@ -66,12 +67,11 @@ as `Fixes #NNNN`.
 1. Settle the uncertain DMR channel fields (TX contact, RX group, encryption
    key) with keypad tests. (Done: the driver works in the stock CHIRP GUI via
    Help → Developer Mode, File → Load Module; download and channel names as expected.)
-2. Upload (MVP 2): the driver's do_upload and tools/dm32uv_write.py are written and
-   tested against tests/fake_dm32uv.py. On the radio: full backup in
-   backup-2026-09-26/ (all 200 pages), and a no-op write of page tag 0x13 worked,
-   with the re-read identical to the backup. Next: a real edit (rename one channel through the
-   driver's upload), then enable UPLOAD_ENABLED. Still to find out: must
-   channels be contiguous (1..count)?
+2. Upload works and is enabled in the driver. Proven on the radio: a no-op write of
+   page 0x13, then a rename via do_upload, with a full re-read differing from the
+   backup (backup-2026-09-26/, all 200 pages) in only the 7 name bytes. Next: try an
+   upload from the CHIRP GUI; test adding a channel past the current count (must
+   channels be contiguous 1..count?) and editing tones on the radio.
 3. Settings page (tag 0x04) from the CPS accessors (`re/BufRefs.java`,
    `re/DecompRefs.java`), then contacts/RX groups/zones.
 4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com

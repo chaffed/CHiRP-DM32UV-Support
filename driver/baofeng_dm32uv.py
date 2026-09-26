@@ -15,10 +15,10 @@
 
 """Baofeng DM-32UV (DMR) driver.
 
-Download works. Upload (do_upload) is written but switched off in CHIRP
-(UPLOAD_ENABLED) until it has been proven on a real radio. The protocol and
-memory layout are described in docs/PROTOCOL.md of the CHiRP-DM32UV-Support
-project.
+Download and upload work. Upload writes only the channel pages, and only
+those that differ from the radio, and reads every written page back. The
+protocol and memory layout are described in docs/PROTOCOL.md of the
+CHiRP-DM32UV-Support project.
 
 The radio keeps its codeplug in 4 KB flash pages whose last byte is a tag
 naming the contents; pages move around as the radio rewrites them. The
@@ -59,7 +59,7 @@ READ_COPIES, READ_TRIES = 3, 10
 # Upload writes channel pages only, one whole aligned page per W frame: the
 # firmware erases the sector on an aligned W and also erases the next sector
 # if a W crosses into it. Tags 0x02 and 0x69 look like calibration.
-UPLOAD_ENABLED = False
+UPLOAD_ENABLED = True
 UPLOAD_TAGS = list(range(0x12, 0x42))
 NEVER_WRITE = (0x02, 0x69)
 WRITE_TRIES = 3
@@ -405,12 +405,19 @@ class DM32UV(chirp_common.CloneModeRadio):
     def get_prompts(cls):
         rp = chirp_common.RadioPrompts()
         rp.experimental = (
-            'This driver is experimental and can only download from the '
-            'radio. Uploading is not supported yet.')
+            'This driver is experimental. Upload changes only the channel '
+            'memories; other settings, contacts and zones are left as they '
+            'are on the radio.')
         rp.pre_download = (
             'Switch the radio on and connect the programming cable.\n\n'
             'The radio returns to normal by itself a few seconds after '
             'the download.')
+        rp.pre_upload = (
+            'Before the first upload, download from the radio and save the '
+            'image as a backup.\n\n'
+            'Upload writes only channel pages that differ from the radio '
+            'and checks each one by reading it back. It takes about a '
+            'minute plus a few seconds per changed page.')
         return rp
 
     def get_features(self):

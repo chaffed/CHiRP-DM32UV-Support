@@ -325,6 +325,11 @@ at once, the read-back matched first time, and the tags were unchanged. A full r
 was byte for byte identical to the backup in all 200 pages. So `W` behaves as the firmware
 analysis says, and the page stays where it was.
 
+**First real edit (2026-09-26).** Driver download, channel 3 renamed `TEST3` → `WRITE OK`,
+driver `do_upload`: it wrote one page (`W 00 70 07 00 10`, tag 0x12 in place), got `06`,
+verified, and skipped every other page as unchanged. A full re-read against the backup: one page
+differs, in exactly 7 bytes (0x070–0x077, the name). The radio showed `WRITE OK` straight away.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction

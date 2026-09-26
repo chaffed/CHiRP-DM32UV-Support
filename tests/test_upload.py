@@ -151,3 +151,15 @@ for addr, data in ((0x05800, good), (0x05000, good[:-1]), (0x0C9000, good),
         pass
 assert not link.pipe.log, link.pipe.log
 print('OK: write guard refuses unaligned, short, out-of-range and 0x02/0x69 pages')
+
+# 7. CHIRP's upload entry point (sync_out) runs the same verified upload.
+r3 = download(flash, 8)
+edit(r3, 90, name='Via sync_out')
+radio = fake.FakeRadio(flash, fake.NOISY, seed=9)
+r3.pipe = radio
+r3.sync_out()
+radio.close()
+assert not radio.violations, radio.violations
+assert [(e[1], e[2]) for e in radio.log if e[0] == 'W'] == [(0x0B3000, PAGE)]
+assert names(download(flash, 10), (90,)) == ['Via sync_out']
+print('OK: sync_out uploads through do_upload')
