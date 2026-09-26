@@ -143,20 +143,57 @@ reads of the same address.
   Probably a page is only allocated once it holds channels.
 - **Tags in use that the CPS worker does not read:** 01, 05, 07, 08, 09, 0c,
   0d, 0e, 4b, 4f–5b, 69–6e, 74, 75, 7c. They may belong to other CPS
-  functions (for example the recording list or boot image).
+  functions (for example the recording list or boot image). A second read (`dump3`, all 101 pages) gave a first look at them:
+
+  | Tags | Contents |
+  |------|----------|
+  | 00 | Stale copies of other pages. One holds `Zone 1` and `Func Demo`, so it's an old zones page. |
+  | 07, 09, 0e, 4f, 50, 52–55, 57–59, 5b | About 99% `ff`: allocated but empty |
+  | 69 | Labels `RxVL`, `RxVM`, `RxVH`, `RxUL`…: looks like **calibration**, do not write |
+  | 51, 6b | Long runs of one repeated 16-bit value (`c2 18`, `5e 3d`): probably RGB565 image data |
+  | 56 | Increasing 16-bit values (`9615`, `9616`, …): some index table |
+  | 01, 05, 08, 0c, 0d, 4b, 5a, 6a, 6c–6e, 74, 75, 7c | Binary, not identified yet |
+
+- **Reads repeat exactly.** Across two separate sessions (`dump2`, `dump3`),
+  the page map, all V/G/`02` replies and all 40 pages read both times were
+  identical byte for byte, although each session corrected different bit
+  errors (117 and 1831). The bit-7 error rate was 0.15% of received bytes.
 
 ### Channel pages (tags 0x12–0x41)
 
-16-byte page header (first byte `0x19` on the first channel page;
-meaning unknown), then 48-byte (0x30) records, so 85 per page and
-48 × 85 = 4080 channels. Known fields, as offsets from the start of the record:
+The CPS keeps the 48 pages in one 192 KB buffer, page p (tag 0x12 + p) at
+p × 0x1000. Records never cross a page boundary. Its channel accessors (for example
+`0x47dcc0`, which gets a channel's name) locate channel n (1–4000) like this:
+
+| Channel | Page | Offset in page |
+|---------|------|----------------|
+| 1–84 | 0 (tag 0x12) | 0x10 + 0x30 × (n − 1), after a 16-byte header |
+| 85–4000 | n / 85 | 0x30 × (n mod 85) |
+| VFO A (n = 4001) | 47 (tag 0x41) | 0xF9F |
+| VFO B (n = 4002) | 47 | 0xFCF |
+
+The header starts with a u16 channel count (`0x47dc80` writes it). On this
+radio it is `0x19` = 25, and there are exactly 25 programmed channels. An
+earlier note here described the pages as a continuous stream. That was wrong: it
+agreed with this layout only on page 0, where all 25 channels are. VFO B's
+record ends at 0xFFE, just before the tag byte. Known fields, as offsets from the start of the record:
 
 | Offset | Size | Field |
 |--------|------|-------|
 | 0x00 | 16 | Name, ASCII, NUL-padded (`Channel 1`) |
 | 0x10 | 4 | RX frequency, BCD little-endian, 10 Hz units (`50 12 00 43` = 430.01250 MHz) |
 | 0x14 | 4 | TX frequency, same format |
-| 0x18 | 24 | Unknown. Example: `14 00 00 00 34 01 00 01 00 ff ff ff ff 00 …` |
+| 0x18 | 1 | Flags. Bit 2 (`0x04`) is probably TX power, 1 = high (keypad test 1). Channels have `0x14`. |
+| 0x19 | 23 | Unknown. Example: `00 00 00 34 01 00 01 00 ff ff ff ff 00 …` |
+
+### Keypad tests
+
+Change one thing on the radio, read, `tools/dm32uv_diff.py old new`.
+
+| # | Change | Result |
+|---|--------|--------|
+| 1 | TX power high → low (mode not recorded, probably VFO A) | VFO A `+18`: `04` → `00`. Tag 04 `+080`: `9e` → `9c`. Both pages moved; the old copies and 2 blank pages became tag 00. |
+| 2 | Same setting back to high | VFO A `+18`: `00` → `04` only. So tag 04 `+080` in test 1 was something else, not power. |
 
 ### Tag 0x02
 
