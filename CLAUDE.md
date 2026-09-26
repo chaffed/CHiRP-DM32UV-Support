@@ -49,13 +49,17 @@ as `Fixes #NNNN`.
   firmware `DM32.01.01.047`, codeplug area `0x001000–0x0c8fff`.
 - **The serial link is unreliable**: about 1 received byte in 1000 has bit 7
   flipped 0→1, and the radio sometimes stops answering until power-cycled.
-  See PROTOCOL.md "Serial link reliability". No writes until this is solved.
+  See PROTOCOL.md "Serial link reliability". The vendor CPS has no error
+  handling either. The tool reads everything 3 times and merges the copies.
+  Writes will need read-back verification.
+- **First full read worked** (2026-09-26, `dump2/`). The channel record format
+  is partly decoded (48-byte records, BCD frequencies). Tag 0x02 looks like
+  band limits and calibration: do not write it. See PROTOCOL.md "First full read".
 
 ## Next steps
 
-1. Full read: `.venv/bin/python tools/dm32uv_read.py /dev/ttyUSB0 -o dump1`.
-   This is the first time `G`, `PROGRAM`, `02` and the page scan run on the
-   real radio. Check `traffic.log` and update PROTOCOL.md. The radio may need
+1. Re-read with the tool that now saves all in-use pages (not only the tags
+   the CPS reads). Power-cycle the radio first: no end-of-session command is known. Check `traffic.log` and update PROTOCOL.md. The radio may need
    a power cycle afterwards, because no end-of-session command is known.
 2. Optional cross-check: run the vendor CPS under Wine (COM port → /dev/ttyUSB0)
    and capture its traffic with `usbmon` + Wireshark.

@@ -2,9 +2,10 @@
 
 Reverse engineered from `DMR CPS.exe` v1.60 (2026-06-08) with Ghidra.
 Addresses such as `0x44a210` refer to that binary. Most of this comes from
-static analysis. Steps 1–5 of the session (handshake and V queries) were
-checked against a real radio on 2026-09-26 (firmware `DM32.01.01.047`); see
-"Observed on a real radio" below. Everything from step 6 on is still unverified.
+static analysis. The whole read session (steps 1–11 below, with a page scan
+and block reads) was checked against a real radio on 2026-09-26 (firmware
+`DM32.01.01.047`); see "First full read" below. **Nothing about writing
+has been tested.**
 
 ## Serial link
 
@@ -30,7 +31,7 @@ It passes mode 0 for read and 1 for write, and runs `FUN_0044a210` in a worker t
 | 6w | write: `S 00 00 00 00 01` + 256 bytes | `0x06` (5 s timeout) | Only sent if that block was loaded |
 | 7 | `FF FF FF FF 0C` | — | Same bytes as CHIRP `baofeng_uv17` `_magics2` |
 | 8 | `PROGRAM` | `0x06` | Radio enters programming mode |
-| 9 | `02` | 8 bytes | Identification |
+| 9 | `02` | 8 bytes | Identification. The real radio replies `ff` × 8. |
 | 10 | `06` | `0x06` | |
 | 11 | page scan, block transfer | | See below |
 
@@ -124,6 +125,45 @@ The codeplug is not one contiguous image. The flash between `V10.start` and
 | 0x5C – 0x64 | 9 | | |
 
 Digital contacts are stored **linearly** from `V15.start`, in 44-byte records, and read or written as 4 KB blocks. First `R start 04 00` returns 4 bytes of length information.
+
+## First full read (2026-09-26)
+
+Done with `tools/dm32uv_read.py` reading every block 3 times and merging
+the copies (see "Serial link reliability"): 776 commands in 70 s, 117
+bit-7 errors corrected, no other errors. The radio accepted repeated `R`
+reads of the same address.
+
+- `G 00 00 00 00 01` returned `S 00 00 00 00 01` and 256 bytes of `ff`.
+- **Pages are scattered** across the 200-page area, and 101 are in use. The order looks
+  like wear levelling, not tag order, so a driver must always scan.
+- **Tag `0x00` is on 30 pages.** Probably stale pages: NOR flash can clear
+  bits without erasing, so writing the tag byte to 0 marks a page as obsolete.
+  Unconfirmed. No tag the CPS reads appears on more than one page.
+- **Channel tags `0x12–0x41` are only partly present** (17 of 48 on this radio).
+  Probably a page is only allocated once it holds channels.
+- **Tags in use that the CPS worker does not read:** 01, 05, 07, 08, 09, 0c,
+  0d, 0e, 4b, 4f–5b, 69–6e, 74, 75, 7c. They may belong to other CPS
+  functions (for example the recording list or boot image).
+
+### Channel pages (tags 0x12–0x41)
+
+16-byte page header (first byte `0x19` on the first channel page;
+meaning unknown), then 48-byte (0x30) records, so 85 per page and
+48 × 85 = 4080 channels. Known fields, as offsets from the start of the record:
+
+| Offset | Size | Field |
+|--------|------|-------|
+| 0x00 | 16 | Name, ASCII, NUL-padded (`Channel 1`) |
+| 0x10 | 4 | RX frequency, BCD little-endian, 10 Hz units (`50 12 00 43` = 430.01250 MHz) |
+| 0x14 | 4 | TX frequency, same format |
+| 0x18 | 24 | Unknown. Example: `14 00 00 00 34 01 00 01 00 ff ff ff ff 00 …` |
+
+### Tag 0x02
+
+Contains `00 25 02 40`, `00 25 52 43` and `00 85 99 46` (400.0250, 435.2250
+and 469.9850 MHz) followed by tables of small numbers. Probably band limits
+and calibration. The CPS reads and writes this tag, but **treat it as
+do-not-write** until its contents are understood.
 
 ## Vendor error handling
 
