@@ -1,7 +1,10 @@
 # Vendor software and anything derived from it: not ours to publish
 *.exe
+*CPS*/
+*CPS*.zip
 re/ghidra_proj/
 re/*.c
+re/*.log
 
 # Radio dumps may contain personal data (radio ID, contacts)
 probe*/

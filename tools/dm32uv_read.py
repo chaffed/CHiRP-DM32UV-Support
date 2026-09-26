@@ -114,8 +114,8 @@ def identify(radio, info):
         print('V %2d     -> %s | %s  %r' % (i, hdr.hex(' '), body.hex(' '),
                                            body if body.isascii() else ''))
 
-    # V ranges are 24-bit flash addresses; the top byte of each u32 is not
-    # part of the address (V10 start reads 0x80001000 on a real radio).
+    # V ranges are 24-bit flash addresses; keep the top byte separately so
+    # a link error there (seen once as 0x80) can't break the page scan.
     for key, i, name in (('cp', 10, 'codeplug'), ('ct', 15, 'contacts')):
         body = bytes.fromhex(info['v'][i])[3:]
         if len(body) < 8:

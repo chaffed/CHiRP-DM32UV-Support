@@ -22,7 +22,7 @@ class Fake:
         elif d == b'SYSINFO': r = b'\x06'
         elif d[:1] == b'V':
             i = d[4]
-            body = {10: struct.pack('<II', CP_START | 0x80000000, CP_END),  # real radio sets a flag byte
+            body = {10: struct.pack('<II', CP_START | 0x80000000, CP_END),  # top byte set, as seen once on a noisy link
                     15: struct.pack('<II', 0x300000, 0x3FFFFF),
                     1: b'DM-32UV'}.get(i, b'\x01\x02')
             r = b'V' + bytes([i, len(body)]) + body

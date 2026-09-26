@@ -18,12 +18,12 @@ if [ ! -d ghidra_proj ]; then
     : "${CPS_EXE:?set CPS_EXE to the path of DMR CPS.exe for the first run}"
     mkdir -p ghidra_proj
     cp "$CPS_EXE" DMR_CPS.exe
-    "$HEADLESS" ghidra_proj dm32uv -import DMR_CPS.exe >/dev/null 2>&1
+    "$HEADLESS" ghidra_proj dm32uv -import DMR_CPS.exe >import.log 2>&1
     # Functions that Ghidra's auto-analysis misses: the Read/Write dialog worker.
     "$HEADLESS" ghidra_proj dm32uv -process DMR_CPS.exe -noanalysis \
-        -scriptPath . -postScript MakeFuncs.java 00449ae0 0044a210 >/dev/null 2>&1
+        -scriptPath "$PWD" -postScript MakeFuncs.java 00449ae0 0044a210 >makefuncs.log 2>&1
 fi
 
 "$HEADLESS" ghidra_proj dm32uv -process DMR_CPS.exe -noanalysis \
-    -scriptPath . -postScript Decomp.java "$PWD/$out" "$@" 2>&1 \
+    -scriptPath "$PWD" -postScript Decomp.java "$PWD/$out" "$@" 2>&1 \
     | grep -E 'ERROR|Exception' || true

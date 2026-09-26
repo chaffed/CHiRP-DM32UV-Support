@@ -46,8 +46,10 @@ as `Fixes #NNNN`.
   The macOS CH340 driver rejected every `tcsetattr`, so macOS is not usable.
 - **First contact with the radio worked** (`--probe`, identify only). The
   handshake and V queries match PROTOCOL.md. The radio reports model `DP570UV`,
-  firmware `DM32.01.01.047`. V ranges are 24-bit addresses with a flag in
-  the top byte (codeplug `0x001000–0x0c8fff`); the tool now masks them.
+  firmware `DM32.01.01.047`, codeplug area `0x001000–0x0c8fff`.
+- **The serial link is unreliable**: about 1 received byte in 1000 has bit 7
+  flipped 0→1, and the radio sometimes stops answering until power-cycled.
+  See PROTOCOL.md "Serial link reliability". No writes until this is solved.
 
 ## Next steps
 
