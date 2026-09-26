@@ -57,14 +57,15 @@ as `Fixes #NNNN`.
 - **Read-only CHIRP driver works** (`driver/baofeng_dm32uv.py`): a real
   download matched the read tool's dump byte for byte. It passes CHIRP's
   driver tests, flake8 and mypy (run from `../chirp` with the driver and an
-  image symlinked into `chirp/drivers/` and `tests/images/`). Upload is refused.
+  image symlinked into `chirp/drivers/` and `tests/images/`), and works in the
+  stock CHIRP GUI as a loaded module. Upload is refused.
 - Tags 0x02 and 0x69 look like band limits and calibration. Never write them.
 
 ## Next steps
 
-1. Try the driver in the CHIRP GUI (Help → Developer Mode, File → Load
-   Module). Settle the uncertain DMR channel fields (TX contact, RX group,
-   encryption key) with keypad tests.
+1. Settle the uncertain DMR channel fields (TX contact, RX group, encryption
+   key) with keypad tests. (Done: the driver works in the stock CHIRP GUI via
+   Help → Developer Mode, File → Load Module; download and channel names as expected.)
 2. Upload (MVP 2): write only channel pages back to the page holding each
    tag, read every page back and compare, and have a restore path from a full
    read first. Find out whether channels must be contiguous (1..count).
