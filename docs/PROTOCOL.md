@@ -214,11 +214,11 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x1D | 7 | Private Confirm | checkbox | CPS |
 | 0x1D | 6 | Short Data Confirm | checkbox | CPS |
 | 0x1D | 5 | TDMA Direct Mode | checkbox. The channel named "TDMA Direct Mode" does not have it set. | CPS |
-| 0x1D | 4 | Time slot | 0 Slot 1, 1 Slot 2 | CPS |
+| 0x1D | 4 | Time slot | 0 Slot 1, 1 Slot 2 | upload |
 | 0x1D | 3–0 | Color code | 0–15 | data |
 | 0x1E | byte | Encryption key | 0 none, n = entry n of the tag 0x10 key list (`[PrivacyType]` dialog). 1 on "Digital Encrypt". | data |
 | 0x1F | 6 | Encryption | checkbox | data |
-| 0x1F | 5–0 | RX group list | 0 none, n = list n of tag 0x0F. 1 on all digital channels. | data |
+| 0x1F | 5–0 | RX group list | 0 none, n = list n of tag 0x0F. 1 on all digital channels. | data, upload |
 | 0x20 | byte | Unknown, 1–8 in the dialog (maybe APRS report channel) | index 0–7 | CPS |
 | 0x21 | 2 bytes | CTC/DCS decode | see tones below | upload |
 | 0x23 | 2 bytes | CTC/DCS encode | see tones below | upload |
@@ -232,7 +232,7 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x29 | 7–4 | Step | 2.5, 5, 6.25, 10, 12.5, 25, 50, 100 kHz `[ChannelStepFreq]` | CPS |
 | 0x29 | 3–2 | PTT ID | 0 Off, 1 BOT, 2 EOT, 3 Both `[ChannelPttId]` | data |
 | 0x2A | byte | Unknown, 1–8 in the dialog | index 0–7 | CPS |
-| 0x2B | byte | TX contact | 0 none, n = contact n of tag 0x67 (up to 250) | CPS, data (all 0) |
+| 0x2B | byte | TX contact | 0 none, n = contact n of tag 0x67 (up to 250) | upload |
 | 0x2C | 4 bytes | VFO only: repeater offset, BCD like the frequencies | | CPS |
 
 **Lists the DMR fields point into.** Found from the CPS name getters and checked against
@@ -362,6 +362,11 @@ the line B position, and a page move from that keypad edit.) No channel page cha
 both ways, channel 12 power Low, uploaded from the GUI. The diff was exactly the predicted
 bytes (ch 10 `+23` `85 08`; ch 11 `+21..+24` `23 80 23 80`; ch 12 `+18` `04` → `00`), in one
 page written in place, and the radio showed all three as set.
+
+**DMR fields from CHIRP (2026-09-26).** Channel 1: TX contact "Radio 2", RX group list 2,
+time slot 2, uploaded from the GUI. The diff was exactly `+1d` `01` → `11`, `+1f` `01` → `02`, `+2b`
+`00` → `02`, in place, and the radio showed all three. (The same diff held a VFO B change and a
+line-B position change made on the radio, and the G block had changed too.)
 
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data

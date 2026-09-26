@@ -67,7 +67,7 @@ as `Fixes #NNNN`.
 1. (Done: tones (CTCSS, DCS) and power uploaded from CHIRP and confirmed on the radio.)
    DMR fields mapped from the CPS and in the driver as extras chosen by name: TX contact
    (+0x2b → tag 0x67), RX group list (+0x1f → tag 0x0F), encryption key (+0x1e → tag
-   0x10), time slot. To do: confirm TX contact and time slot with an upload on the radio. (Done: the driver works in the stock CHIRP GUI via
+   0x10), time slot, all confirmed with an upload from the GUI. (Done: the driver works in the stock CHIRP GUI via
    Help → Developer Mode, File → Load Module; download and channel names as expected.)
 2. Upload works and is enabled in the driver. Proven on the radio: a no-op write of
    page 0x13, then a rename via do_upload, with a full re-read differing from the
