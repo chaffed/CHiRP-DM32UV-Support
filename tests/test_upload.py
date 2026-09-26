@@ -43,6 +43,12 @@ def build_radio():
     for z, name, members in ((1, 'Analog', [1, 2]), (2, 'Mixed', [3, 90, 1])):
         blank._zone(z).name = name.ljust(16, '\x00')
         blank._set_zone_members(z, members)
+    for kind, names in (('contact', ['Alice', 'Bob TG']), ('rxgroup', ['Group A', 'Group B']),
+                        ('privacy', ['Key 1'])):
+        tag, first, size, length, _count = drv.DMR_LISTS[kind]
+        base = drv.IMAGE_TAGS.index(tag) * PAGE + first
+        for i, name in enumerate(names):
+            blank.get_mmap().set(base + i * size, name.encode().ljust(length, b'\x00'))
     img = blank.get_mmap().get_packed()
     slot = lambda t: img[drv.IMAGE_TAGS.index(t) * PAGE:][:PAGE]  # noqa: E731
     rng = random.Random(7)
@@ -50,7 +56,9 @@ def build_radio():
              0x02: (0x0B5000, rng.randbytes(PAGE)),
              0x69: (0x0BC000, rng.randbytes(PAGE)),
              0x04: (0x04C000, rng.randbytes(PAGE)),
-             0x5C: (0x040000, slot(0x5C))}
+             0x5C: (0x040000, slot(0x5C)),
+             0x67: (0x009000, slot(0x67)), 0x0F: (0x00F000, slot(0x0F)),
+             0x10: (0x00C000, slot(0x10))}
     flash = fake.make_flash(pages, stale=(0x010000, 0x023000))
     return flash, pages
 
@@ -210,3 +218,24 @@ upload(r6, flash, 18)
 assert [b.get_name() for b in download(flash, 19).get_bank_model().get_mappings()] == \
     ['Analog', 'Renamed zone']
 print('OK: zone rename uploaded')
+
+
+# 12. DMR list fields: pick a TX contact, RX group list and key by name.
+r7 = download(flash, 20)
+m = r7.get_memory(3)
+extra = {x.get_name(): x for x in m.extra}
+assert list(extra['tx_contact'].value.get_options()) == ['None', '1: Alice', '2: Bob TG']
+extra['tx_contact'].value = '2: Bob TG'
+extra['rxgroup'].value = '1: Group A'
+extra['privacy'].value = '1: Key 1'
+extra['encrypt'].value = True
+extra['timeslot'].value = '2'
+r7.set_memory(m)
+n, writes, _ = upload(r7, flash, 21)
+assert n == 1, n
+got = {x.get_name(): str(x.value) for x in download(flash, 22).get_memory(3).extra}
+assert (got['tx_contact'], got['rxgroup'], got['privacy'], got['encrypt'], got['timeslot']) == \
+    ('2: Bob TG', '1: Group A', '1: Key 1', 'True', '2'), got
+_c = download(flash, 23)._chan(3)
+assert (int(_c.tx_contact), int(_c.rxgroup), int(_c.privacy), int(_c.timeslot)) == (2, 1, 1, 1)
+print('OK: TX contact, RX group list, key and time slot set by name and uploaded')

@@ -57,6 +57,13 @@ VFO_OFFSETS = (0xF9F, 0xFCF)            # in the last channel page
 ZONE_TAG0 = 0x5C
 ZONE_BASE = IMAGE_TAGS.index(ZONE_TAG0) * PAGE
 ZONE_PER_PAGE, ZONE_COUNT, ZONE_MEMBERS = 28, 250, 64
+# Name lists the DMR channel fields point into (CPS name getters in
+# brackets): tag, offset of entry 1, entry size, name length, entries.
+DMR_LISTS = {
+    'contact': (0x67, 0x013, 0x10, 16, 250),     # TX contacts (0x474350)
+    'rxgroup': (0x0F, 0x011, 0x6D, 11, 32),      # RX group lists (0x477da0)
+    'privacy': (0x10, 0x301, 0x2C, 10, 32),      # encryption keys (0x479630)
+}
 
 # Received bytes sometimes have this bit set when the radio sent it clear.
 LINK_FAULT = 0x80
@@ -82,7 +89,7 @@ struct chan {
   u8 squelch:4, aprs_report:2, aprs_ptt_analog:1, aprs_ptt_digital:1;
   u8 private_confirm:1, short_data_confirm:1, tdma_direct:1, timeslot:1,
      colorcode:4;
-  u8 unknown1e;
+  u8 privacy;
   u8 unknown1f:1, encrypt:1, rxgroup:6;
   u8 unknown20;
   u8 rxtone[2];
@@ -93,7 +100,7 @@ struct chan {
   u8 unknown28;
   u8 step:4, ptt_id:2, unknown29:2;
   u8 unknown2a;
-  u8 unknown2b;
+  u8 tx_contact;
   lbcd offset[4];
 };
 
@@ -637,6 +644,30 @@ class DM32UV(chirp_common.CloneModeRadio):
         mem.extra = self._get_extra(_mem)
         return mem
 
+    def _dmr_names(self, kind):
+        """{index: name} of the entries in one of the DMR_LISTS."""
+        tag, first, size, length, count = DMR_LISTS[kind]
+        base = IMAGE_TAGS.index(tag) * PAGE + first
+        data = self._mmap.get_packed()
+        names = {}
+        for n in range(1, count + 1):
+            raw = data[base + (n - 1) * size:][:length]
+            name = raw.split(b'\xFF')[0].split(b'\x00')[0]
+            if name:
+                names[n] = name.decode('ascii', 'replace')
+        return names
+
+    def _dmr_choice(self, kind, value):
+        """A RadioSettingValueList for a DMR list index (0 = none)."""
+        names = self._dmr_names(kind)
+        options = ['None'] + ['%d: %s' % kv for kv in sorted(names.items())]
+        current = 'None' if not value else '%d: %s' % (
+            value, names.get(value, '(unnamed)'))
+        if current not in options:
+            options.append(current)
+        return RadioSettingValueList(options,
+                                     current_index=options.index(current))
+
     def _get_extra(self, _mem):
         extra = RadioSettingGroup('extra', 'Extra')
         extra.append(RadioSetting(
@@ -650,6 +681,18 @@ class DM32UV(chirp_common.CloneModeRadio):
             'timeslot', 'Time slot (DMR)',
             RadioSettingValueList(['1', '2'],
                                   current_index=int(_mem.timeslot))))
+        extra.append(RadioSetting(
+            'tx_contact', 'TX contact (DMR)',
+            self._dmr_choice('contact', int(_mem.tx_contact))))
+        extra.append(RadioSetting(
+            'rxgroup', 'RX group list (DMR)',
+            self._dmr_choice('rxgroup', int(_mem.rxgroup))))
+        extra.append(RadioSetting(
+            'encrypt', 'Encryption (DMR)',
+            RadioSettingValueBoolean(bool(_mem.encrypt))))
+        extra.append(RadioSetting(
+            'privacy', 'Encryption key (DMR)',
+            self._dmr_choice('privacy', int(_mem.privacy))))
         extra.append(RadioSetting(
             'squelch', 'Squelch level',
             RadioSettingValueInteger(0, 9, min(int(_mem.squelch), 9))))
@@ -721,5 +764,9 @@ class DM32UV(chirp_common.CloneModeRadio):
                     _mem.chtype = value
             elif name == 'timeslot':
                 _mem.timeslot = int(str(setting.value)) - 1
+            elif name in ('tx_contact', 'rxgroup', 'privacy'):
+                choice = str(setting.value)
+                setattr(_mem, name,
+                        0 if choice == 'None' else int(choice.split(':')[0]))
             else:
                 setattr(_mem, name, int(setting.value))

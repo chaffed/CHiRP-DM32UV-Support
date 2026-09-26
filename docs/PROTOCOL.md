@@ -206,7 +206,7 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x1A | 1–0 | VFO only: repeater offset direction | 0 none, 1 +, 2 − `[PinCha]` | CPS |
 | 0x1B | 7 | Emergency Indicator | checkbox | data |
 | 0x1B | 6 | Emergency ACK | checkbox | data |
-| 0x1B | 4–0 | Emergency system (digital) | 0 none, n = entry n (list from tag 0x10) | data |
+| 0x1B | 4–0 | Emergency system (digital) | 0 none, n = entry n of the tag 0x10 emergency list (`[DigitalEmergency]`) | data |
 | 0x1C | 7–4 | Squelch level | 0–9 | data (all 3) |
 | 0x1C | 3–2 | APRS report type | 0 Off, 1 Digital `[ChannelAprsReport]` | data |
 | 0x1C | 1 | Analog APRS PTT mode | checkbox | CPS |
@@ -216,9 +216,9 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x1D | 5 | TDMA Direct Mode | checkbox. The channel named "TDMA Direct Mode" does not have it set. | CPS |
 | 0x1D | 4 | Time slot | 0 Slot 1, 1 Slot 2 | CPS |
 | 0x1D | 3–0 | Color code | 0–15 | data |
-| 0x1E | byte | Probably encryption key | 0 none, n = entry n (list from tag 0x10). Set to 1 on "Digital Encrypt". Could also be TX contact. | data? |
+| 0x1E | byte | Encryption key | 0 none, n = entry n of the tag 0x10 key list (`[PrivacyType]` dialog). 1 on "Digital Encrypt". | data |
 | 0x1F | 6 | Encryption | checkbox | data |
-| 0x1F | 5–0 | Probably RX group list | 0 none, n = list n (names from tag 0x0F). 1 on all digital channels. | data? |
+| 0x1F | 5–0 | RX group list | 0 none, n = list n of tag 0x0F. 1 on all digital channels. | data |
 | 0x20 | byte | Unknown, 1–8 in the dialog (maybe APRS report channel) | index 0–7 | CPS |
 | 0x21 | 2 bytes | CTC/DCS decode | see tones below | upload |
 | 0x23 | 2 bytes | CTC/DCS encode | see tones below | upload |
@@ -232,8 +232,21 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x29 | 7–4 | Step | 2.5, 5, 6.25, 10, 12.5, 25, 50, 100 kHz `[ChannelStepFreq]` | CPS |
 | 0x29 | 3–2 | PTT ID | 0 Off, 1 BOT, 2 EOT, 3 Both `[ChannelPttId]` | data |
 | 0x2A | byte | Unknown, 1–8 in the dialog | index 0–7 | CPS |
-| 0x2B | byte | Unknown list from tag 0x67 (up to 250 entries). Maybe TX contact. | | CPS |
+| 0x2B | byte | TX contact | 0 none, n = contact n of tag 0x67 (up to 250) | CPS, data (all 0) |
 | 0x2C | 4 bytes | VFO only: repeater offset, BCD like the frequencies | | CPS |
+
+**Lists the DMR fields point into.** Found from the CPS name getters and checked against
+the test radio's data (entry n, 1-based; names NUL- or `ff`-padded):
+
+| List | Tag | Entry n at | Size | Name | Max | Test radio |
+|------|-----|-----------|------|------|-----|------------|
+| TX contacts | 0x67 | 0x03 + 0x10 × n (u16 count at 0) | 16 | 16 | 250 | count 5: `Radio 1`…`Radio 5` |
+| RX group lists | 0x0F | 0x11 + 0x6D × (n−1) | 109 | 11 | 32 | `RX Group 1`… Members follow the name as 3-byte contact numbers (group 1 = 1–5) |
+| Emergency systems | 0x10 | 0x14 × (n−1) | 20 | 10 | 8 | `DEmer 1`… |
+| Encryption keys | 0x10 | 0x301 + 0x2C × (n−1) | 44 | 10 | 32 | `Encrypt 1`…: name, type byte, key |
+
+The contact names in tag 0x67 carry no IDs; the IDs are probably in the big contacts area
+(V15). Not needed for choosing a TX contact by name.
 
 **Tones** (0x21, 0x23), two bytes; the second holds the flags:
 `ff ff` = none. CTCSS: tenths of a Hz as 4 BCD digits, little-endian
