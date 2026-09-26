@@ -2,6 +2,8 @@
 *.exe
 *CPS*/
 *CPS*.zip
+*Firmware*/
+*Firmware*.zip
 re/ghidra_proj/
 re/*.c
 re/*.log
@@ -13,3 +15,7 @@ dump*/
 __pycache__/
 *.pyc
 .DS_Store
+
+# CHIRP images of a real radio are dumps too (a sanitised test image is fine)
+*.img
+!tests/images/*.img
