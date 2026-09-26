@@ -339,6 +339,11 @@ matched. But the radio only lists channels through **zones** (tag 0x5C), and cha
 is in none (zone 1 = 1–16, zone 2 = 17–25), so it does not appear on the radio. A new
 channel needs adding to a zone as well.
 
+**Zone edit from the CHIRP GUI (2026-09-26).** Channel 6 added to zone "Func Demo" in the
+Banks tab and uploaded. A re-read showed only the zone page changed: zone 2 count 9 → 10,
+member 10 = 6. (The same diff also held channel 26 added to zone 1 earlier on the keypad,
+the line B position, and a page move from that keypad edit.) No channel page changed.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
