@@ -3,7 +3,7 @@
 
 Pages are matched by tag, not by address, because the radio moves a page
 when it rewrites it (the old copy is left behind with tag 0x00). Stale
-tag 0x00 pages are ignored. Offsets in channel pages (tags 0x12-0x41) are
+(tag 0x00) and free (tag 0xFF) pages are ignored. Offsets in channel pages (tags 0x12-0x41) are
 also shown as a channel number or VFO slot and a record offset, using the
 CPS's layout (see PROTOCOL.md "Channel pages").
 
@@ -25,7 +25,7 @@ def load(dump):
     pages = {}
     for name in os.listdir(os.path.join(dump, 'pages')):
         tag, addr = int(name[3:5], 16), int(name[6:12], 16)
-        if tag == 0x00:
+        if tag in (0x00, 0xFF):     # stale and free pages
             continue
         with open(os.path.join(dump, 'pages', name), 'rb') as f:
             pages[tag] = (addr, f.read())
