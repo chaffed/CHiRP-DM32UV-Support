@@ -64,7 +64,8 @@ as `Fixes #NNNN`.
 
 ## Next steps
 
-1. Settle the uncertain DMR channel fields (TX contact, RX group, encryption
+1. (Done: tones (CTCSS, DCS) and power uploaded from CHIRP and confirmed on the radio.)
+   Settle the uncertain DMR channel fields (TX contact, RX group, encryption
    key) with keypad tests. (Done: the driver works in the stock CHIRP GUI via
    Help → Developer Mode, File → Load Module; download and channel names as expected.)
 2. Upload works and is enabled in the driver. Proven on the radio: a no-op write of

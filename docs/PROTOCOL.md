@@ -185,7 +185,8 @@ checkbox control ID (looked up in `[Resource]`) each value goes to. Value lists 
 sections of the CPS language file (installer file `10`). **Check** says what
 confirms the field: *keypad* = changed on the radio and seen in a diff; *data* =
 consistent with all 25 channels on the test radio, e.g. a channel named "DTMF Call"
-has signaling type DTMF; *CPS* = accessor and dialog only.
+has signaling type DTMF; *upload* = written by the driver from CHIRP and confirmed on the
+radio's display; *CPS* = accessor and dialog only.
 
 | Offset | Bits | Field | Values | Check |
 |--------|------|-------|--------|-------|
@@ -194,7 +195,7 @@ has signaling type DTMF; *CPS* = accessor and dialog only.
 | 0x14 | 4 bytes | TX frequency | same | data |
 | 0x18 | 7–4 | Channel type | 0 Analog, 1 Digital, 2 Fixed Analog, 3 Fixed Digital `[ChannelMode]` | data |
 | 0x18 | 3 | Forbid TX | checkbox | CPS |
-| 0x18 | 2–1 | Power | 0 Low, 1 Middle, 2 High `[PowerSelect]`, stored as `bits >> 1` (so `0x04` = High) | keypad |
+| 0x18 | 2–1 | Power | 0 Low, 1 Middle, 2 High `[PowerSelect]`, stored as `bits >> 1` (so `0x04` = High) | keypad, upload |
 | 0x18 | 0 | Lone Work | checkbox | CPS |
 | 0x19 | 7 | Bandwidth | 0 12.5 kHz, 1 25 kHz | data |
 | 0x19 | 6 | Auto Scan | checkbox | CPS |
@@ -219,8 +220,8 @@ has signaling type DTMF; *CPS* = accessor and dialog only.
 | 0x1F | 6 | Encryption | checkbox | data |
 | 0x1F | 5–0 | Probably RX group list | 0 none, n = list n (names from tag 0x0F). 1 on all digital channels. | data? |
 | 0x20 | byte | Unknown, 1–8 in the dialog (maybe APRS report channel) | index 0–7 | CPS |
-| 0x21 | 2 bytes | CTC/DCS decode | see tones below | CPS |
-| 0x23 | 2 bytes | CTC/DCS encode | see tones below | CPS |
+| 0x21 | 2 bytes | CTC/DCS decode | see tones below | upload |
+| 0x23 | 2 bytes | CTC/DCS encode | see tones below | upload |
 | 0x25 | 5 | Compander | checkbox | CPS |
 | 0x25 | 4 | VOX | checkbox | CPS |
 | 0x25 | 3–0 | Unknown: Off, 1–4 (maybe scramble) | | CPS |
@@ -343,6 +344,11 @@ channel needs adding to a zone as well.
 Banks tab and uploaded. A re-read showed only the zone page changed: zone 2 count 9 → 10,
 member 10 = 6. (The same diff also held channel 26 added to zone 1 earlier on the keypad,
 the line B position, and a page move from that keypad edit.) No channel page changed.
+
+**Tones and power from CHIRP (2026-09-26).** Channel 10 TX tone 88.5 Hz, channel 11 DCS 023N
+both ways, channel 12 power Low, uploaded from the GUI. The diff was exactly the predicted
+bytes (ch 10 `+23` `85 08`; ch 11 `+21..+24` `23 80 23 80`; ch 12 `+18` `04` → `00`), in one
+page written in place, and the radio showed all three as set.
 
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
