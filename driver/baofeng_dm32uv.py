@@ -15,8 +15,10 @@
 
 """Baofeng DM-32UV (DMR) driver.
 
-Download only for now. The protocol and memory layout are described in
-docs/PROTOCOL.md of the CHiRP-DM32UV-Support project.
+Download works. Upload (do_upload) is written but switched off in CHIRP
+(UPLOAD_ENABLED) until it has been proven on a real radio. The protocol and
+memory layout are described in docs/PROTOCOL.md of the CHiRP-DM32UV-Support
+project.
 
 The radio keeps its codeplug in 4 KB flash pages whose last byte is a tag
 naming the contents; pages move around as the radio rewrites them. The
@@ -53,6 +55,14 @@ VFO_OFFSETS = (0xF9F, 0xFCF)            # in the last channel page
 # Received bytes sometimes have this bit set when the radio sent it clear.
 LINK_FAULT = 0x80
 READ_COPIES, READ_TRIES = 3, 10
+
+# Upload writes channel pages only, one whole aligned page per W frame: the
+# firmware erases the sector on an aligned W and also erases the next sector
+# if a W crosses into it. Tags 0x02 and 0x69 look like calibration.
+UPLOAD_ENABLED = False
+UPLOAD_TAGS = list(range(0x12, 0x42))
+NEVER_WRITE = (0x02, 0x69)
+WRITE_TRIES = 3
 
 CHAN_FORMAT = """
 struct chan {
@@ -245,6 +255,17 @@ def _enter_program(link):
         raise errors.RadioError('Radio did not acknowledge')
 
 
+def _scan(link, start, end, radio, status):
+    """Tag of every page: ({tag: [addresses]}, [free page addresses])."""
+    pages = list(range(start, end + 1 - PAGE + 1, PAGE))
+    where = collections.defaultdict(list)
+    for i, addr in enumerate(pages):
+        where[link.read_block(addr + PAGE - 1, 1, timeout=0.5)[0]].append(addr)
+        status.cur = i
+        radio.status_fn(status)
+    return where, where.pop(0xFF, [])
+
+
 def do_download(radio):
     link = _Link(radio.pipe)
     firmware, start, end = _identify(link)
@@ -253,26 +274,90 @@ def do_download(radio):
 
     status = chirp_common.Status()
     status.msg = 'Scanning flash pages'
-    pages = list(range(start, end + 1 - PAGE + 1, PAGE))
-    status.max = len(pages) + len(IMAGE_TAGS)
-    where = {}
-    for i, addr in enumerate(pages):
-        tag = link.read_block(addr + PAGE - 1, 1, timeout=0.5)[0]
-        if tag in IMAGE_TAGS and tag not in where:
-            where[tag] = addr
-        status.cur = i
-        radio.status_fn(status)
+    status.max = (end + 1 - start) // PAGE + len(IMAGE_TAGS)
+    where, _free = _scan(link, start, end, radio, status)
 
     status.msg = 'Cloning from radio'
+    base = status.cur + 1
     image = bytearray(b'\xFF' * (len(IMAGE_TAGS) * PAGE))
     for i, tag in enumerate(IMAGE_TAGS):
-        if tag in where:
-            data = link.read_block(where[tag], PAGE)
+        if where.get(tag):
+            data = link.read_block(where[tag][0], PAGE)
             image[i * PAGE:(i + 1) * PAGE] = data
-        status.cur = len(pages) + i
+        status.cur = base + i
         radio.status_fn(status)
     radio._metadata['dm32uv_firmware'] = firmware
     return memmap.MemoryMapBytes(bytes(image))
+
+
+def _write_page(link, addr, data, start, end):
+    """Write one whole page with W and read it back until it matches."""
+    if (len(data) != PAGE or addr % PAGE or addr < start or
+            addr + PAGE - 1 > end or data[-1] in NEVER_WRITE):
+        raise errors.RadioError('Refusing unsafe write at %06x' % addr)
+    frame = (b'W' + struct.pack('<I', addr)[:3] + struct.pack('<H', PAGE) +
+             bytes(data))
+    for _attempt in range(WRITE_TRIES):
+        link.send(frame)
+        ack = link.recv(1, timeout=5.0)
+        if not ack:
+            # The radio may still be waiting for data; after 2 s it gives
+            # up and ends the session, which the read-back below reports.
+            time.sleep(2.5)
+        elif not _marker_ok(ack[0], 0x06):
+            LOG.warning('Unexpected reply %s to W %06x', ack.hex(), addr)
+        if link.read_block(addr, PAGE) == bytes(data):
+            return
+        LOG.warning('Page %06x did not verify, writing it again', addr)
+    raise errors.RadioError('Page at %06x did not verify after %d writes' % (
+        addr, WRITE_TRIES))
+
+
+def do_upload(radio):
+    """Write changed channel pages back to the radio, verifying each one.
+
+    A page is written to wherever the radio keeps that tag now, or to the
+    first free page if the radio has none yet. Pages that already match the
+    image are left alone, so an unchanged image writes nothing. Returns the
+    number of pages written.
+    """
+    image = radio.get_mmap().get_packed()
+    link = _Link(radio.pipe)
+    firmware, start, end = _identify(link)
+    LOG.info('Upload to DM-32UV firmware %s', firmware)
+    _enter_program(link)
+
+    status = chirp_common.Status()
+    status.msg = 'Scanning flash pages'
+    status.max = (end + 1 - start) // PAGE + len(UPLOAD_TAGS)
+    where, free = _scan(link, start, end, radio, status)
+    dupes = [t for t in UPLOAD_TAGS if len(where.get(t, [])) > 1]
+    if dupes:
+        raise errors.RadioError(
+            'The radio has more than one page with tag %s; not writing' %
+            ', '.join('%02x' % t for t in dupes))
+
+    status.msg = 'Cloning to radio'
+    base = status.cur + 1
+    written = 0
+    for i, tag in enumerate(UPLOAD_TAGS):
+        slot = IMAGE_TAGS.index(tag) * PAGE
+        want = image[slot:slot + PAGE - 1] + bytes([tag])
+        if image[slot:slot + PAGE - 1] != b'\xFF' * (PAGE - 1):
+            if where.get(tag):
+                addr = where[tag][0]
+                if link.read_block(addr, PAGE) == want:
+                    addr = None
+            elif free:
+                addr = free.pop(0)
+            else:
+                raise errors.RadioError('No free page left on the radio')
+            if addr is not None:
+                _write_page(link, addr, want, start, end)
+                written += 1
+        status.cur = base + i
+        radio.status_fn(status)
+    return written
 
 
 # --- Tones ------------------------------------------------------------------
@@ -364,8 +449,16 @@ class DM32UV(chirp_common.CloneModeRadio):
         self.process_mmap()
 
     def sync_out(self):
-        raise errors.RadioError('Uploading to the DM-32UV is not supported '
-                                'yet by this driver')
+        if not UPLOAD_ENABLED:
+            raise errors.RadioError('Uploading to the DM-32UV is not '
+                                    'supported yet by this driver')
+        try:
+            do_upload(self)
+        except errors.RadioError:
+            raise
+        except Exception as e:
+            LOG.exception('Upload failed')
+            raise errors.RadioError('Failed to upload to radio: %s' % e)
 
     def process_mmap(self):
         self._memobj = bitwise.parse(MEM_FORMAT, self._mmap)
