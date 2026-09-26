@@ -38,13 +38,19 @@ def build_radio():
         if n == 2:
             m.tmode, m.rtone = 'Tone', 88.5
         blank.set_memory(m)
+    hdr = blank._memobj.zone_hdr
+    hdr.count, hdr.a_zone, hdr.a_pos, hdr.b_zone, hdr.b_pos = 2, 1, 1, 2, 2
+    for z, name, members in ((1, 'Analog', [1, 2]), (2, 'Mixed', [3, 90, 1])):
+        blank._zone(z).name = name.ljust(16, '\x00')
+        blank._set_zone_members(z, members)
     img = blank.get_mmap().get_packed()
     slot = lambda t: img[drv.IMAGE_TAGS.index(t) * PAGE:][:PAGE]  # noqa: E731
     rng = random.Random(7)
     pages = {0x12: (0x05000, slot(0x12)), 0x13: (0x0B3000, slot(0x13)),
              0x02: (0x0B5000, rng.randbytes(PAGE)),
              0x69: (0x0BC000, rng.randbytes(PAGE)),
-             0x04: (0x04C000, rng.randbytes(PAGE))}
+             0x04: (0x04C000, rng.randbytes(PAGE)),
+             0x5C: (0x040000, slot(0x5C))}
     flash = fake.make_flash(pages, stale=(0x010000, 0x023000))
     return flash, pages
 
@@ -163,3 +169,44 @@ assert not radio.violations, radio.violations
 assert [(e[1], e[2]) for e in radio.log if e[0] == 'W'] == [(0x0B3000, PAGE)]
 assert names(download(flash, 10), (90,)) == ['Via sync_out']
 print('OK: sync_out uploads through do_upload')
+
+
+# 8. Zones: add a channel to a zone. Only the zone page is written, in place,
+#    and display state the radio changed since the download is kept.
+ZP = pages[0x5C][0]
+r4 = download(flash, 11)
+bm = r4.get_bank_model()
+assert [b.get_name() for b in bm.get_mappings()] == ['Analog', 'Mixed']
+flash[ZP + 1] = 2                                       # someone browsed on the radio
+bm.add_memory_to_mapping(r4.get_memory(200), bm.get_mappings()[0])
+n, writes, _ = upload(r4, flash, 12)
+assert n == 1 and [(a, ln) for _, a, ln in writes] == [(ZP, PAGE)], writes
+r5 = download(flash, 13)
+assert r5._zone_members(1) == [1, 2, 200] and r5._zone_members(2) == [3, 90, 1]
+assert flash[ZP + 1] == 2, 'display state from the radio was not kept'
+print('OK: zone member added; only the zone page written; display state kept')
+
+# 9. A display pointer past the end of a zone that shrank is reset to 1.
+flash[ZP + 7], flash[ZP + 3] = 2, 3                     # line B on zone 2, position 3
+bm = r5.get_bank_model()
+bm.remove_memory_from_mapping(r5.get_memory(1), bm.get_mappings()[1])
+bm.remove_memory_from_mapping(r5.get_memory(90), bm.get_mappings()[1])
+upload(r5, flash, 14)
+assert download(flash, 15)._zone_members(2) == [3]
+assert (flash[ZP + 7], flash[ZP + 3]) == (2, 1), (flash[ZP + 7], flash[ZP + 3])
+print('OK: display pointer into a shrunken zone reset to position 1')
+
+# 10. Browsing on the radio alone does not make the zone page look changed.
+r6 = download(flash, 16)
+flash[ZP + 1] = 1
+n, writes, _ = upload(r6, flash, 17)
+assert n == 0 and not writes, writes
+print('OK: display-state changes alone write nothing')
+
+# 11. Renaming a zone is uploaded.
+bm = r6.get_bank_model()
+bm.get_mappings()[1].set_name('Renamed zone')
+upload(r6, flash, 18)
+assert [b.get_name() for b in download(flash, 19).get_bank_model().get_mappings()] == \
+    ['Analog', 'Renamed zone']
+print('OK: zone rename uploaded')

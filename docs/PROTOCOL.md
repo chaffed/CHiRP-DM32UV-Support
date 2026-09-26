@@ -255,24 +255,27 @@ not a setting. Bit 5 is probably the active line (1 = B, set when line B was edi
 and bit 1 probably line A's channel/frequency mode (cleared when power was changed in VFO mode
 in test 1). To be checked against the CPS tag 04 accessors.
 
-### Zones (tag 0x5C)
+### Zones (tags 0x5C–0x64)
 
-From data only, not yet checked against the CPS zone accessors:
+Confirmed by the CPS zone accessors (`0x482740`–`0x482cd0`, buffer `DAT_0150c13c`).
+The 9 pages form one buffer, page p = tag 0x5C + p. Zone z (1–250) is at page `(z−1)/28`,
+offset `0x91 × ((z−1) mod 28)`, plus 0x10 on page 0 only (the header), so 28 zones per
+page. Limits in the CPS: 250 zones (`0xfa`), 64 members per zone (`0x40`).
 
 | Offset | Contents |
 |--------|----------|
-| 0x00 | Zone count (u8, `02` on the test radio), then u16 current channel for display line A (confirmed in test 4) and u16 current channel for line B (fits test 3) |
-| 0x10 + 0x91 × k | Zone k+1: 16-byte name (NUL-padded, then `ff`), u8 member count, 64 × u16 channel numbers (1-based, zero-filled). 145 bytes per zone. |
+| header +0 | u8 zone count (2 on the test radio) |
+| header +1, +3 | u8 current **position within the zone** for display lines A and B (1–64) |
+| header +5, +7 | u8 current **zone** for lines A and B (1–250) |
+| header +2, +4, +6 | 0 (unknown) |
+| zone +0x00 | name, 16 bytes, NUL-padded then `ff` |
+| zone +0x10 | u8 member count |
+| zone +0x11 | 64 × u16 LE channel numbers (1-based, zero-filled) |
 
-Zone 1 ("Zone 1") holds channels 1–16 in order and zone 2 ("Func Demo") holds channels 17–25.
-Tags 0x5C–0x64 (9 pages) × 28 zones per page = 252, which fits the radio's 250 zones.
-
-### Tag 0x02
-
-Contains `00 25 02 40`, `00 25 52 43` and `00 85 99 46` (400.0250, 435.2250
-and 469.9850 MHz) followed by tables of small numbers. Probably band limits
-and calibration. The CPS reads and writes this tag, but **treat it as
-do-not-write** until its contents are understood.
+The radio shows only channels that are in a zone, in the zone's member order. The driver
+exposes zones as CHIRP banks (a channel can be in several zones). When uploading the zone
+page it keeps the radio's current header bytes 1–7 (they change whenever someone browses)
+and resets a pointer that would fall outside its zone.
 
 ## Radio firmware (v1.01.048)
 

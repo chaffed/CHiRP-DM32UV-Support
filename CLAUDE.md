@@ -70,8 +70,10 @@ as `Fixes #NNNN`.
 2. Upload works and is enabled in the driver. Proven on the radio: a no-op write of
    page 0x13, then a rename via do_upload, with a full re-read differing from the
    backup (backup-2026-09-26/, all 200 pages) in only the 7 name bytes. Next: try an
-   upload from the CHIRP GUI; test adding a channel past the current count (must
-   channels be contiguous 1..count?) and editing tones on the radio.
+   upload from the CHIRP GUI and editing tones on the radio. (Done: a channel appended past
+   the count works; it only shows on the radio once it's in a zone.)
+   Zones are now CHIRP banks (existing zones only; creating zones not yet). Test on the radio:
+   add a channel to a zone in the GUI's Banks tab and upload.
 3. Settings page (tag 0x04) from the CPS accessors (`re/BufRefs.java`,
    `re/DecompRefs.java`), then contacts/RX groups/zones.
 4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com

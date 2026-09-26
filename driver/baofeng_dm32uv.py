@@ -51,6 +51,12 @@ CH_TAG0 = 0x12
 CH_BASE = IMAGE_TAGS.index(CH_TAG0) * PAGE
 CH_SIZE, CH_PER_PAGE, CH_COUNT = 0x30, 85, 4000
 VFO_OFFSETS = (0xF9F, 0xFCF)            # in the last channel page
+# Zones (tags 0x5C-0x64): the CPS zone accessors (0x482740-0x482cd0) put
+# zone z at page (z-1)//28, slot (z-1)%28 of 0x91 bytes, after a 16-byte
+# header on the first page only. At most 250 zones of 64 members.
+ZONE_TAG0 = 0x5C
+ZONE_BASE = IMAGE_TAGS.index(ZONE_TAG0) * PAGE
+ZONE_PER_PAGE, ZONE_COUNT, ZONE_MEMBERS = 28, 250, 64
 
 # Received bytes sometimes have this bit set when the radio sent it clear.
 LINK_FAULT = 0x80
@@ -60,7 +66,7 @@ READ_COPIES, READ_TRIES = 3, 10
 # firmware erases the sector on an aligned W and also erases the next sector
 # if a W crosses into it. Tags 0x02 and 0x69 look like calibration.
 UPLOAD_ENABLED = True
-UPLOAD_TAGS = list(range(0x12, 0x42))
+UPLOAD_TAGS = list(range(0x12, 0x42)) + list(range(0x5C, 0x65))
 NEVER_WRITE = (0x02, 0x69)
 WRITE_TRIES = 3
 
@@ -90,6 +96,12 @@ struct chan {
   u8 unknown2b;
   lbcd offset[4];
 };
+
+struct zone {
+  char name[16];
+  u8 count;
+  ul16 members[64];
+};
 """
 
 
@@ -105,10 +117,23 @@ def _mem_format():
     # VFO A and B are back to back (VFO_OFFSETS).
     fmt.append('#seekto 0x%x;\nstruct chan vfo0;\nstruct chan vfo1;' % (
         CH_BASE + 47 * PAGE + VFO_OFFSETS[0]))
+    # Bytes 1/3 are the current position in the zone for display lines A/B,
+    # bytes 5/7 the current zone for A/B (bounded by 64 and 250 in the CPS).
+    fmt.append('#seekto 0x%x;\nstruct {\n  u8 count;\n  u8 a_pos;\n'
+               '  u8 unknown2;\n  u8 b_pos;\n  u8 unknown4;\n  u8 a_zone;\n'
+               '  u8 unknown6;\n  u8 b_zone;\n} zone_hdr;' % ZONE_BASE)
+    for p in range(9):
+        fmt.append('#seekto 0x%x;\nstruct zone zpage%d[%d];' % (
+            ZONE_BASE + p * PAGE + (0x10 if p == 0 else 0), p, ZONE_PER_PAGE))
     return '\n'.join(fmt)
 
 
 MEM_FORMAT = _mem_format()
+
+
+def zone_offset(z):
+    """(page, index) of zone z (1-250), as the CPS computes it (0x482830)."""
+    return (z - 1) // ZONE_PER_PAGE, (z - 1) % ZONE_PER_PAGE
 
 
 def channel_offset(n):
@@ -313,6 +338,25 @@ def _write_page(link, addr, data, start, end):
         addr, WRITE_TRIES))
 
 
+def _keep_display_state(want, current):
+    """Keep the radio's current zone/position bytes in the zone header.
+
+    They change whenever someone browses on the radio, so the image's copy
+    is usually stale; they must also point at an existing zone member.
+    """
+    want = bytearray(want)
+    want[1:8] = current[1:8]
+    count = min(want[0], ZONE_COUNT)
+    for pos, zone in ((1, 5), (3, 7)):
+        if not 1 <= want[zone] <= count:
+            want[zone], want[pos] = 1, 1
+        page, index = zone_offset(want[zone])
+        members = want[0x10 + index * 0x91 + 16] if page == 0 else None
+        if members is not None and not 1 <= want[pos] <= max(members, 1):
+            want[pos] = 1
+    return bytes(want)
+
+
 def do_upload(radio):
     """Write changed channel pages back to the radio, verifying each one.
 
@@ -346,7 +390,10 @@ def do_upload(radio):
         if image[slot:slot + PAGE - 1] != b'\xFF' * (PAGE - 1):
             if where.get(tag):
                 addr = where[tag][0]
-                if link.read_block(addr, PAGE) == want:
+                current = link.read_block(addr, PAGE)
+                if tag == ZONE_TAG0:
+                    want = _keep_display_state(want, current)
+                if current == want:
                     addr = None
             elif free:
                 addr = free.pop(0)
@@ -393,6 +440,64 @@ def _encode_tone(raw, mode, value, pol):
         raw[0] = raw[1] = 0xFF
 
 
+class DM32UVZone(chirp_common.NamedBank):
+    """A zone on the radio; its index is the zone number minus 1."""
+
+    def _zone(self):
+        return self._model._radio._zone(self.index + 1)
+
+    def get_name(self):
+        return str(self._zone().name).rstrip('\x00\xFF ')
+
+    def set_name(self, name):
+        self._zone().name = str(name)[:16].ljust(16, '\x00')
+
+
+class DM32UVZoneModel(chirp_common.MTOBankModel):
+    """The radio's zones. A channel can be in several zones; the order of
+    channels in a zone is kept, new ones are added at the end."""
+
+    def __init__(self, radio):
+        super().__init__(radio, 'Zones')
+
+    def get_num_mappings(self):
+        return self._radio._zone_count()
+
+    def get_mappings(self):
+        zones = []
+        for i in range(self.get_num_mappings()):
+            zone = DM32UVZone(self, '%i' % (i + 1), 'Zone %i' % (i + 1))
+            zone.index = i
+            zones.append(zone)
+        return zones
+
+    def add_memory_to_mapping(self, memory, bank):
+        members = self._radio._zone_members(bank.index + 1)
+        if memory.number in members:
+            return
+        if len(members) >= ZONE_MEMBERS:
+            raise errors.RadioError('Zone %s is full (%i channels)' % (
+                bank.get_name(), ZONE_MEMBERS))
+        self._radio._set_zone_members(bank.index + 1,
+                                      members + [memory.number])
+
+    def remove_memory_from_mapping(self, memory, bank):
+        members = self._radio._zone_members(bank.index + 1)
+        if memory.number not in members:
+            raise Exception('Memory %i is not in zone %s' % (
+                memory.number, bank.get_name()))
+        self._radio._set_zone_members(
+            bank.index + 1, [m for m in members if m != memory.number])
+
+    def get_mapping_memories(self, bank):
+        return [self._radio.get_memory(n)
+                for n in self._radio._zone_members(bank.index + 1)]
+
+    def get_memory_mappings(self, memory):
+        return [bank for bank in self.get_mappings()
+                if memory.number in self._radio._zone_members(bank.index + 1)]
+
+
 @directory.register
 class DM32UV(chirp_common.CloneModeRadio):
     """Baofeng DM-32UV"""
@@ -423,7 +528,8 @@ class DM32UV(chirp_common.CloneModeRadio):
     def get_features(self):
         rf = chirp_common.RadioFeatures()
         rf.memory_bounds = (1, CH_COUNT)
-        rf.has_bank = False
+        rf.has_bank = True
+        rf.has_bank_names = True
         rf.has_ctone = True
         rf.has_cross = True
         rf.has_rx_dtcs = True
@@ -473,6 +579,28 @@ class DM32UV(chirp_common.CloneModeRadio):
     def _chan(self, number):
         page, index = channel_offset(number)
         return getattr(self._memobj, 'page%d' % page)[index]
+
+    def get_bank_model(self):
+        return DM32UVZoneModel(self)
+
+    def _zone(self, z):
+        page, index = zone_offset(z)
+        return getattr(self._memobj, 'zpage%d' % page)[index]
+
+    def _zone_count(self):
+        count = int(self._memobj.zone_hdr.count)
+        return 0 if count > ZONE_COUNT else count
+
+    def _zone_members(self, z):
+        zone = self._zone(z)
+        count = min(int(zone.count), ZONE_MEMBERS)
+        return [int(m) for m in zone.members[0:count]]
+
+    def _set_zone_members(self, z, members):
+        zone = self._zone(z)
+        for i in range(ZONE_MEMBERS):
+            zone.members[i] = members[i] if i < len(members) else 0
+        zone.count = len(members)
 
     def _count(self):
         count = int(self._memobj.ch_count)
@@ -537,6 +665,12 @@ class DM32UV(chirp_common.CloneModeRadio):
         _mem = self._chan(mem.number)
         if mem.empty:
             _mem.set_raw(b'\xFF' * CH_SIZE)
+            # Zones must not point at a channel that no longer exists.
+            for z in range(1, self._zone_count() + 1):
+                members = self._zone_members(z)
+                if mem.number in members:
+                    self._set_zone_members(
+                        z, [m for m in members if m != mem.number])
             if mem.number == self._count():
                 count = mem.number - 1
                 while count and self.get_memory(count).empty:
