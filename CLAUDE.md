@@ -74,6 +74,13 @@ as `Fixes #NNNN`.
 4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com
    issue, a PR as `dm32uv: Add Baofeng DM-32UV driver`.
 
+## Firmware notes
+
+The radio firmware (Baofeng's download, gitignored like the CPS) is unencrypted C-SKY
+code at `0x300c000`. csky-elf binutils 2.44 is built in `~/opt/csky`, and
+`re/fw_disasm.sh` disassembles it. Protocol handler: `0x3029438`. Write semantics and the
+rules they imply are in PROTOCOL.md "Radio firmware". The radio must stay on firmware .047.
+
 ## Analysis notes
 
 Key CPS functions: `0x44a210` is the codeplug read/write worker (found via the

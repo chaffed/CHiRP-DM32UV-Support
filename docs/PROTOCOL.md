@@ -274,6 +274,54 @@ and 469.9850 MHz) followed by tables of small numbers. Probably band limits
 and calibration. The CPS reads and writes this tag, but **treat it as
 do-not-write** until its contents are understood.
 
+## Radio firmware (v1.01.048)
+
+From a static look at the radio's own firmware, `DM32_L01_048_20250821.bin`
+from Baofeng's firmware download. The radio tested here runs .047. The .048 changelog says
+"Expand to 150K Contacts, cancel the recording", so the contacts layout may differ;
+**do not update the radio's firmware** while this work depends on .047. How to
+reproduce: `re/fw_disasm.sh` (needs csky-elf binutils, see the script).
+
+- The file is a 256-byte header (`BFUV32-V2`) followed by **unencrypted C-SKY
+  (CK80x) code** linked at `0x300c000`, so there is a bootloader below. Start-up copies
+  `0x306fdc0` → RAM `0x18000800` and `0x30bd768` → RAM `0x10000–0x2f098`, which holds the
+  SPI flash routines.
+- Command strings are in a table at `0x30ad6b4`: `PROGRAM`, `PSEARCH`, `DP570UV`
+  (the model ID sent in the PSEARCH reply), `PASSSTA`, `PASWORD`, `PCTESTM`,
+  `RTCITEM`, `DEL-RCD`, `IDCHECK`, `SYSINFO`, `588999`. The CPS doesn't use `RTCITEM`,
+  `DEL-RCD` or `IDCHECK`.
+- **Top-level loop** `0x302a324`: waits for 7-byte commands. `PROGRAM` sets a
+  "programming" flag and runs the session `0x3029438`. When the session returns,
+  `0x305d8f4` writes to the system-control block at `0x11000000`, which looks like a
+  **software reset**. Then the flag is cleared.
+- **Session** `0x3029438`: sends `06`, expects `02` and replies with 8 bytes of
+  `ff` (the identification reply always seen), expects `06` and replies `06`, then loops:
+  - Reads a 6-byte frame `cmd a0 a1 a2 l0 l1` (address 24-bit LE, length 16-bit LE),
+    waiting up to 2 s. **If nothing arrives within 2 s the session ends** (then the reset
+    above), so no end-of-session command is needed. (`V` queries are 5 bytes.)
+  - `R`: reads flash and replies with the *received* frame, first byte changed to `W`,
+    plus data. So a reply header echoes exactly what the radio received.
+  - `W`: receives `length` data bytes (2 s timeout; if fewer arrive, no reply). If the
+    address is 4 KB-aligned it **erases that sector** first. It then programs the data
+    (`0x2baac`); **if the data crosses into the next sector, that sector is erased
+    too**. Replies `06`. No checksum and no read-back.
+  - `D`: another read (reply `W`), from a different store (maybe recordings), in
+    512-byte units.
+  - `G` / `S`: read / write a *different* memory (reply `S` / ack `06`), with the same
+    erase-on-aligned-address rule. The CPS sends `S 00 00 00 00 01` + 256 bytes when
+    writing, which erases that memory's first sector. **Our tools must never send `S`.**
+
+**Rules for writing, from the above:** only `W` frames of exactly 0x1000 bytes at a
+4 KB-aligned address (never cross a sector; never write tags 0x02/0x69); read every
+written page back and compare; keep the tag byte at 0xFFF; stop sending when done
+and let the 2 s timeout end the session.
+
+**Link direction.** Checking the echoed `R` headers in six full-read logs (5496
+requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
+from the right page. **No request ever arrived corrupted.** So the PC→radio direction
+is much cleaner than radio→PC (below about 1e-4 per byte, against about 1.5e-3). The
+bit-7 fault is on the cable's receive side.
+
 ## Vendor error handling
 
 Checked in `DMR CPS.exe` (the serial helpers `0x48f400`/`0x48f570`/`0x48f630` and
@@ -314,6 +362,6 @@ two copies agree, and after a write, read the block back and compare.
 - Cause of the bit-7 receive errors, and why the radio stops answering after some sessions.
 - What V6, V7, V8, V9 and V14 hold (voice prompts, fonts, boot image, recordings?).
 - Reply to `02` after `PROGRAM`, and everything from step 6 on (not yet tried on a real radio).
-- Whether the radio needs an explicit end-of-session command. The CPS just closes the port.
+- ~~End-of-session command~~: none needed. The firmware ends the session after 2 s idle and resets (see "Radio firmware"). Still to check on the radio: does it restart by itself after a read?
 - Which tag is which: diff captures after changing one setting at a time.
 - The CPS `.enc` file format (only needed to import CPS files).
