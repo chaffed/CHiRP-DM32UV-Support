@@ -292,13 +292,15 @@ reproduce: `re/fw_disasm.sh` (needs csky-elf binutils, see the script).
   `DEL-RCD` or `IDCHECK`.
 - **Top-level loop** `0x302a324`: waits for 7-byte commands. `PROGRAM` sets a
   "programming" flag and runs the session `0x3029438`. When the session returns,
-  `0x305d8f4` writes to the system-control block at `0x11000000`, which looks like a
-  **software reset**. Then the flag is cleared.
+  `0x305d8f4` writes to the system-control block at `0x11000000`, then the flag is
+  cleared. On the radio this is **not a visible reboot**: after a read the radio simply
+  goes back to its home screen by itself (checked 2026-09-26). So no power cycle is needed
+  after a session.
 - **Session** `0x3029438`: sends `06`, expects `02` and replies with 8 bytes of
   `ff` (the identification reply always seen), expects `06` and replies `06`, then loops:
   - Reads a 6-byte frame `cmd a0 a1 a2 l0 l1` (address 24-bit LE, length 16-bit LE),
-    waiting up to 2 s. **If nothing arrives within 2 s the session ends** (then the reset
-    above), so no end-of-session command is needed. (`V` queries are 5 bytes.)
+    waiting up to 2 s. **If nothing arrives within 2 s the session ends** and the radio
+    returns to normal, so no end-of-session command is needed. (`V` queries are 5 bytes.)
   - `R`: reads flash and replies with the *received* frame, first byte changed to `W`,
     plus data. So a reply header echoes exactly what the radio received.
   - `W`: receives `length` data bytes (2 s timeout; if fewer arrive, no reply). If the
@@ -362,6 +364,6 @@ two copies agree, and after a write, read the block back and compare.
 - Cause of the bit-7 receive errors, and why the radio stops answering after some sessions.
 - What V6, V7, V8, V9 and V14 hold (voice prompts, fonts, boot image, recordings?).
 - Reply to `02` after `PROGRAM`, and everything from step 6 on (not yet tried on a real radio).
-- ~~End-of-session command~~: none needed. The firmware ends the session after 2 s idle and resets (see "Radio firmware"). Still to check on the radio: does it restart by itself after a read?
+- ~~End-of-session command~~: none needed. The firmware ends the session after 2 s idle and the radio returns to its home screen by itself (confirmed on the radio).
 - Which tag is which: diff captures after changing one setting at a time.
 - The CPS `.enc` file format (only needed to import CPS files).

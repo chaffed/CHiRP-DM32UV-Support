@@ -409,8 +409,8 @@ class DM32UV(chirp_common.CloneModeRadio):
             'radio. Uploading is not supported yet.')
         rp.pre_download = (
             'Switch the radio on and connect the programming cable.\n\n'
-            'After the download the radio stays in programming mode; '
-            'switch it off and on again to use it.')
+            'The radio returns to normal by itself a few seconds after '
+            'the download.')
         return rp
 
     def get_features(self):

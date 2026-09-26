@@ -52,8 +52,8 @@ as `Fixes #NNNN`.
   flipped 0→1. The vendor CPS has no error handling either. Every read is
   done 3 times and the copies are merged byte by byte. Writes will need
   read-back verification. Never send anything at a baud rate other than 115200: the radio
-  hangs until power-cycled. After every read session the radio stays in programming mode
-  and must be power-cycled.
+  hangs until power-cycled. After a normal session no power cycle is needed: the radio
+  ends the session after 2 s idle and returns to its home screen by itself.
 - **Read-only CHIRP driver works** (`driver/baofeng_dm32uv.py`): a real
   download matched the read tool's dump byte for byte. It passes CHIRP's
   driver tests, flake8 and mypy (run from `../chirp` with the driver and an
