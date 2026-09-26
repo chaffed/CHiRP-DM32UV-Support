@@ -39,34 +39,39 @@ as `Fixes #NNNN`.
 
 ## Status (2026-09-26)
 
-- Done: static analysis of CPS v1.60 → `docs/PROTOCOL.md`. Read-only tool
-  `tools/dm32uv_read.py`, which passes `tests/fake_radio.py`.
+- Protocol, page layout and the full channel record are documented in
+  `docs/PROTOCOL.md`: from the CPS (Ghidra, `re/`) plus keypad tests on the radio
+  (change one thing, read, `tools/dm32uv_diff.py`).
 - Development is on a Debian laptop: CH340 cable on `/dev/ttyUSB0` with the
-  `ch341` driver, user in `dialout`, Python venv in `.venv` (pyserial, tox).
-  The macOS CH340 driver rejected every `tcsetattr`, so macOS is not usable.
-- **First contact with the radio worked** (`--probe`, identify only). The
-  handshake and V queries match PROTOCOL.md. The radio reports model `DP570UV`,
-  firmware `DM32.01.01.047`, codeplug area `0x001000–0x0c8fff`.
+  `ch341` driver, user in `dialout`, Python venv in `.venv` (pyserial, tox,
+  CHIRP installed editable from `../chirp`, a clone of kk7ds/chirp). Ghidra
+  12.1.4 in `~/ghidra_12.1.4_PUBLIC`. The extracted CPS installer is in the
+  project folder (gitignored); `DMR CPS.exe` is file `16`, the English UI
+  text is file `10`.
 - **The serial link is unreliable**: about 1 received byte in 1000 has bit 7
-  flipped 0→1, and the radio sometimes stops answering until power-cycled.
-  See PROTOCOL.md "Serial link reliability". The vendor CPS has no error
-  handling either. The tool reads everything 3 times and merges the copies.
-  Writes will need read-back verification.
-- **First full read worked** (2026-09-26, `dump2/`). The channel record format
-  is partly decoded (48-byte records, BCD frequencies). Tag 0x02 looks like
-  band limits and calibration: do not write it. See PROTOCOL.md "First full read".
+  flipped 0→1. The vendor CPS has no error handling either. Every read is
+  done 3 times and the copies are merged byte by byte. Writes will need
+  read-back verification. Never send anything at a baud rate other than 115200: the radio
+  hangs until power-cycled. After every read session the radio stays in programming mode
+  and must be power-cycled.
+- **Read-only CHIRP driver works** (`driver/baofeng_dm32uv.py`): a real
+  download matched the read tool's dump byte for byte. It passes CHIRP's
+  driver tests, flake8 and mypy (run from `../chirp` with the driver and an
+  image symlinked into `chirp/drivers/` and `tests/images/`). Upload is refused.
+- Tags 0x02 and 0x69 look like band limits and calibration. Never write them.
 
 ## Next steps
 
-1. Re-read with the tool that now saves all in-use pages (not only the tags
-   the CPS reads). Power-cycle the radio first: no end-of-session command is known. Check `traffic.log` and update PROTOCOL.md. The radio may need
-   a power cycle afterwards, because no end-of-session command is known.
-2. Optional cross-check: run the vendor CPS under Wine (COM port → /dev/ttyUSB0)
-   and capture its traffic with `usbmon` + Wireshark.
-3. Map the page tags by changing one setting at a time in the CPS (under Wine),
-   reading with the tool, and diffing the pages.
-4. Write the CHIRP driver module: download, upload (write back to the same
-   pages, keeping the tag byte), then the channel memory map.
+1. Try the driver in the CHIRP GUI (Help → Developer Mode, File → Load
+   Module). Settle the uncertain DMR channel fields (TX contact, RX group,
+   encryption key) with keypad tests.
+2. Upload (MVP 2): write only channel pages back to the page holding each
+   tag, read every page back and compare, and have a restore path from a full
+   read first. Find out whether channels must be contiguous (1..count).
+3. Settings page (tag 0x04) from the CPS accessors (`re/BufRefs.java`,
+   `re/DecompRefs.java`), then contacts/RX groups/zones.
+4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com
+   issue, a PR as `dm32uv: Add Baofeng DM-32UV driver`.
 
 ## Analysis notes
 
