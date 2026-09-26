@@ -11,6 +11,7 @@ re/*.log
 # Radio dumps may contain personal data (radio ID, contacts)
 probe*/
 dump*/
+backup*/
 
 __pycache__/
 *.pyc

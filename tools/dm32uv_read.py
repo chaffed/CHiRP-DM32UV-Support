@@ -13,6 +13,7 @@ by byte; V queries are repeated until three replies match.
     python3 dm32uv_read.py --list
     python3 dm32uv_read.py /dev/ttyUSB0 --probe      # identify only (Linux)
     python3 dm32uv_read.py /dev/ttyUSB0 -o dump1      # full read
+    python3 dm32uv_read.py /dev/ttyUSB0 --all-pages -o backup1   # every page
 """
 
 import argparse
@@ -194,8 +195,8 @@ def identify(radio, info):
             continue
         hdr, body = radio.query_v(b'V\x00\x00\x00' + bytes([i]))
         info['v'][i] = (hdr + body).hex(' ')
-        print('V %2d     -> %s | %s  %r' % (i, hdr.hex(' '), body.hex(' '),
-                                           body if body.isascii() else ''))
+        print('V %2d     -> %s | %s  %r' % (
+            i, hdr.hex(' '), body.hex(' '), body if body.isascii() else ''))
 
     # V ranges are 24-bit flash addresses in u32 fields.
     for key, i, name in (('cp', 10, 'codeplug'), ('ct', 15, 'contacts')):
@@ -249,6 +250,9 @@ def main():
     ap.add_argument('--list', action='store_true', help='list serial ports')
     ap.add_argument('--probe', action='store_true',
                     help='identify only; do not enter programming mode')
+    ap.add_argument('--all-pages', action='store_true',
+                    help='save every codeplug page, including free (tag ff) '
+                    'ones, e.g. for a backup')
     ap.add_argument('--contacts', action='store_true',
                     help='also read the digital contacts area')
     ap.add_argument('-o', '--out', default='dump')
@@ -281,7 +285,7 @@ def main():
             # others (and stale tag 0x00 pages) help with mapping.
             os.makedirs(os.path.join(args.out, 'pages'), exist_ok=True)
             for addr, tag in sorted(tags.items(), key=lambda at: (at[1], at[0])):
-                if tag == 0xFF:
+                if tag == 0xFF and not args.all_pages:
                     continue
                 data = radio.read_block(addr, PAGE)
                 name = 'tag%02x_%06x.bin' % (tag, addr)

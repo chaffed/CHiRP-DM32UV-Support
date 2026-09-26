@@ -93,8 +93,8 @@ def main():
             addr_a, addr_b)
         print('tag %02x%s:' % (tag, moved))
         for start, end in runs(da, db):
-            print('  %03x-%03x %-12s %s' % (start, end - 1, where(tag, start),
-                                           da[start:end].hex(' ')))
+            print('  %03x-%03x %-12s %s' % (
+                start, end - 1, where(tag, start), da[start:end].hex(' ')))
             print('  %7s %-12s %s' % ('', '', db[start:end].hex(' ')))
     moved_only = [t for t in sorted(set(a) & set(b))
                   if a[t][1] == b[t][1] and a[t][0] != b[t][0]]
