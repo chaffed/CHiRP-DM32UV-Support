@@ -41,18 +41,20 @@ as `Fixes #NNNN`.
 
 - Done: static analysis of CPS v1.60 → `docs/PROTOCOL.md`. Read-only tool
   `tools/dm32uv_read.py`, which passes `tests/fake_radio.py`.
-- **Not yet done: any contact with a real radio.** On macOS the cable (CH340,
-  `1a86:7523`) failed. Apple's driver rejects every `tcsetattr` with EINVAL,
-  even unchanged settings, so it isn't a permissions problem. Development moved
-  to a Debian laptop, where the `ch341` driver should work (`/dev/ttyUSB0`,
-  user in the `dialout` group).
+- Development is on a Debian laptop: CH340 cable on `/dev/ttyUSB0` with the
+  `ch341` driver, user in `dialout`, Python venv in `.venv` (pyserial, tox).
+  The macOS CH340 driver rejected every `tcsetattr`, so macOS is not usable.
+- **First contact with the radio worked** (`--probe`, identify only). The
+  handshake and V queries match PROTOCOL.md. The radio reports model `DP570UV`,
+  firmware `DM32.01.01.047`. V ranges are 24-bit addresses with a flag in
+  the top byte (codeplug `0x001000–0x0c8fff`); the tool now masks them.
 
 ## Next steps
 
-1. `python3 tools/dm32uv_read.py /dev/ttyUSB0 --probe -o probe1`, then a full read.
-   Fix the tool and update PROTOCOL.md "Open questions" from `traffic.log`.
-   The radio may need a power cycle after a full read, because no
-   end-of-session command is known.
+1. Full read: `.venv/bin/python tools/dm32uv_read.py /dev/ttyUSB0 -o dump1`.
+   This is the first time `G`, `PROGRAM`, `02` and the page scan run on the
+   real radio. Check `traffic.log` and update PROTOCOL.md. The radio may need
+   a power cycle afterwards, because no end-of-session command is known.
 2. Optional cross-check: run the vendor CPS under Wine (COM port → /dev/ttyUSB0)
    and capture its traffic with `usbmon` + Wireshark.
 3. Map the page tags by changing one setting at a time in the CPS (under Wine),

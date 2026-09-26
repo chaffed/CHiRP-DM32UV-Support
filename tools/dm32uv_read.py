@@ -114,16 +114,17 @@ def identify(radio, info):
         print('V %2d     -> %s | %s  %r' % (i, hdr.hex(' '), body.hex(' '),
                                            body if body.isascii() else ''))
 
-    v10 = bytes.fromhex(info['v'][10])[3:]
-    v15 = bytes.fromhex(info['v'][15])[3:]
-    if len(v10) >= 8:
-        info['cp_start'], info['cp_end'] = struct.unpack('<II', v10[:8])
-        print('codeplug area: %#08x - %#08x' % (info['cp_start'],
-                                               info['cp_end']))
-    if len(v15) >= 8:
-        info['ct_start'], info['ct_end'] = struct.unpack('<II', v15[:8])
-        print('contacts area: %#08x - %#08x' % (info['ct_start'],
-                                               info['ct_end']))
+    # V ranges are 24-bit flash addresses; the top byte of each u32 is not
+    # part of the address (V10 start reads 0x80001000 on a real radio).
+    for key, i, name in (('cp', 10, 'codeplug'), ('ct', 15, 'contacts')):
+        body = bytes.fromhex(info['v'][i])[3:]
+        if len(body) < 8:
+            continue
+        start, end = struct.unpack('<II', body[:8])
+        info[key + '_start'], info[key + '_end'] = start & 0xFFFFFF, end & 0xFFFFFF
+        info[key + '_flags'] = '%02x %02x' % (start >> 24, end >> 24)
+        print('%s area: %#08x - %#08x  (flag bytes %s)' % (
+            name, info[key + '_start'], info[key + '_end'], info[key + '_flags']))
 
 
 def enter_program(radio, info):

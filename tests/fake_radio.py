@@ -2,7 +2,7 @@
 import os, struct, sys, runpy, tempfile
 import serial
 
-CP_START, CP_END = 0x100000, 0x100000 + 0x60 * 0x1000 - 1
+CP_START, CP_END = 0x001000, 0x0C8FFF              # values seen on a real radio
 flash = bytearray(b'\xff' * 0x400000)
 tags = [0x02, 0x03, 0x0B] + list(range(0x12, 0x42)) + [0x5C]
 for i, t in enumerate(tags):
@@ -17,12 +17,12 @@ class Fake:
     def read(self, n): d, self.out = self.out[:n], self.out[n:]; return d
     def write(self, d):
         r = b''
-        if d == b'PSEARCH': r = b'\x06DM32UV\x00'[:8]
+        if d == b'PSEARCH': r = b'\x06DP570UV'
         elif d == b'PASSSTA': r = b'P\x00\x00'
         elif d == b'SYSINFO': r = b'\x06'
         elif d[:1] == b'V':
             i = d[4]
-            body = {10: struct.pack('<II', CP_START, CP_END),
+            body = {10: struct.pack('<II', CP_START | 0x80000000, CP_END),  # real radio sets a flag byte
                     15: struct.pack('<II', 0x300000, 0x3FFFFF),
                     1: b'DM-32UV'}.get(i, b'\x01\x02')
             r = b'V' + bytes([i, len(body)]) + body
