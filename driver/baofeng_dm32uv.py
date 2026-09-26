@@ -448,13 +448,20 @@ def _encode_tone(raw, mode, value, pol):
 
 
 class DM32UVZone(chirp_common.NamedBank):
-    """A zone on the radio; its index is the zone number minus 1."""
+    """A zone on the radio; its index is the zone number minus 1.
+
+    One zone after the last existing one is offered as "New zone"; adding
+    a channel to it creates it (see DM32UVZoneModel)."""
 
     def _zone(self):
         return self._model._radio._zone(self.index + 1)
 
     def get_name(self):
-        return str(self._zone().name).rstrip('\x00\xFF ')
+        name = str(self._zone().name).rstrip('\x00\xFF ')
+        if self.index + 1 > self._model._radio._zone_count() and (
+                not name or not name.isprintable()):
+            return 'New zone'
+        return name
 
     def set_name(self, name):
         self._zone().name = str(name)[:16].ljust(16, '\x00')
@@ -462,13 +469,17 @@ class DM32UVZone(chirp_common.NamedBank):
 
 class DM32UVZoneModel(chirp_common.MTOBankModel):
     """The radio's zones. A channel can be in several zones; the order of
-    channels in a zone is kept, new ones are added at the end."""
+    channels in a zone is kept, new ones are added at the end.
+
+    Zones are numbered 1..count without gaps, so the only zone that can be
+    created is count + 1: it is offered as a spare, and becomes a real zone
+    when a channel is added to it. A last zone left empty is removed."""
 
     def __init__(self, radio):
         super().__init__(radio, 'Zones')
 
     def get_num_mappings(self):
-        return self._radio._zone_count()
+        return min(self._radio._zone_count() + 1, ZONE_COUNT)
 
     def get_mappings(self):
         zones = []
@@ -479,7 +490,10 @@ class DM32UVZoneModel(chirp_common.MTOBankModel):
         return zones
 
     def add_memory_to_mapping(self, memory, bank):
-        members = self._radio._zone_members(bank.index + 1)
+        z = bank.index + 1
+        if z > self._radio._zone_count():
+            self._radio._create_zone(z)
+        members = self._radio._zone_members(z)
         if memory.number in members:
             return
         if len(members) >= ZONE_MEMBERS:
@@ -495,6 +509,7 @@ class DM32UVZoneModel(chirp_common.MTOBankModel):
                 memory.number, bank.get_name()))
         self._radio._set_zone_members(
             bank.index + 1, [m for m in members if m != memory.number])
+        self._radio._drop_empty_last_zone()
 
     def get_mapping_memories(self, bank):
         return [self._radio.get_memory(n)
@@ -609,6 +624,23 @@ class DM32UV(chirp_common.CloneModeRadio):
             zone.members[i] = members[i] if i < len(members) else 0
         zone.count = len(members)
 
+    def _create_zone(self, z):
+        """Make zone z (which must be count + 1) an empty, named zone."""
+        if z != self._zone_count() + 1 or z > ZONE_COUNT:
+            raise errors.RadioError('Zones must be created in order')
+        zone = self._zone(z)
+        name = str(zone.name).rstrip('\x00\xFF ')
+        if not name or not name.isprintable():
+            zone.name = ('Zone %i' % z).ljust(16, '\x00')
+        self._set_zone_members(z, [])
+        self._memobj.zone_hdr.count = z
+
+    def _drop_empty_last_zone(self):
+        count = self._zone_count()
+        if count > 1 and not self._zone_members(count):
+            self._zone(count).name.set_raw(b'\xFF' * 16)
+            self._memobj.zone_hdr.count = count - 1
+
     def _count(self):
         count = int(self._memobj.ch_count)
         return 0 if count > CH_COUNT else count
@@ -714,6 +746,7 @@ class DM32UV(chirp_common.CloneModeRadio):
                 if mem.number in members:
                     self._set_zone_members(
                         z, [m for m in members if m != mem.number])
+            self._drop_empty_last_zone()
             if mem.number == self._count():
                 count = mem.number - 1
                 while count and self.get_memory(count).empty:

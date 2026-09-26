@@ -287,7 +287,10 @@ page. Limits in the CPS: 250 zones (`0xfa`), 64 members per zone (`0x40`).
 | zone +0x11 | 64 × u16 LE channel numbers (1-based, zero-filled) |
 
 The radio shows only channels that are in a zone, in the zone's member order. The driver
-exposes zones as CHIRP banks (a channel can be in several zones). When uploading the zone
+exposes zones as CHIRP banks (a channel can be in several zones), plus one spare "New zone"
+(count + 1): adding a channel to it creates that zone, keeping zone numbers gap-free, and a
+last zone left empty is removed. A zone past 28 needs the next zone page (tag 0x5D…),
+which upload places on a free page if the radio has none. When uploading the zone
 page it keeps the radio's current header bytes 1–7 (they change whenever someone browses)
 and resets a pointer that would fall outside its zone.
 

@@ -184,7 +184,7 @@ print('OK: sync_out uploads through do_upload')
 ZP = pages[0x5C][0]
 r4 = download(flash, 11)
 bm = r4.get_bank_model()
-assert [b.get_name() for b in bm.get_mappings()] == ['Analog', 'Mixed']
+assert [b.get_name() for b in bm.get_mappings()] == ['Analog', 'Mixed', 'New zone']
 flash[ZP + 1] = 2                                       # someone browsed on the radio
 bm.add_memory_to_mapping(r4.get_memory(200), bm.get_mappings()[0])
 n, writes, _ = upload(r4, flash, 12)
@@ -216,7 +216,7 @@ bm = r6.get_bank_model()
 bm.get_mappings()[1].set_name('Renamed zone')
 upload(r6, flash, 18)
 assert [b.get_name() for b in download(flash, 19).get_bank_model().get_mappings()] == \
-    ['Analog', 'Renamed zone']
+    ['Analog', 'Renamed zone', 'New zone']
 print('OK: zone rename uploaded')
 
 
@@ -239,3 +239,37 @@ assert (got['tx_contact'], got['rxgroup'], got['privacy'], got['encrypt'], got['
 _c = download(flash, 23)._chan(3)
 assert (int(_c.tx_contact), int(_c.rxgroup), int(_c.privacy), int(_c.timeslot)) == (2, 1, 1, 1)
 print('OK: TX contact, RX group list, key and time slot set by name and uploaded')
+
+
+# 13. Creating a zone: the spare "New zone" becomes zone 3 when a channel is
+#     added, and is uploaded; removing its last channel removes it again.
+r8 = download(flash, 24)
+bm = r8.get_bank_model()
+assert [b.get_name() for b in bm.get_mappings()] == ['Analog', 'Renamed zone', 'New zone']
+bm.add_memory_to_mapping(r8.get_memory(2), bm.get_mappings()[2])
+assert [b.get_name() for b in bm.get_mappings()] == \
+    ['Analog', 'Renamed zone', 'Zone 3', 'New zone']
+upload(r8, flash, 25)
+r9 = download(flash, 26)
+assert r9._zone_count() == 3 and r9._zone_members(3) == [2]
+bm = r9.get_bank_model()
+bm.remove_memory_from_mapping(r9.get_memory(2), bm.get_mappings()[2])
+assert [b.get_name() for b in bm.get_mappings()] == ['Analog', 'Renamed zone', 'New zone']
+print('OK: zone created from the spare, uploaded, and removed again when emptied')
+
+# 14. Zone 29 is on the second zone page (tag 0x5D), which the radio does not
+#     have yet: upload puts it on a free page.
+r10 = download(flash, 27)
+bm = r10.get_bank_model()
+for z in range(3, 30):
+    bm.add_memory_to_mapping(r10.get_memory(1), bm.get_mappings()[z - 1])
+assert r10._zone_count() == 29
+before = bytes(flash)
+n, writes, _ = upload(r10, flash, 28)
+assert n == 2, n                                        # zone pages 0x5C and 0x5D
+new = [a for _, a, _ in writes if before[a + PAGE - 1] == 0xFF]
+assert len(new) == 1 and flash[new[0] + PAGE - 1] == 0x5D, writes
+r11 = download(flash, 29)
+assert r11._zone_count() == 29 and r11._zone_members(29) == [1]
+assert r11.get_bank_model().get_mappings()[28].get_name() == 'Zone 29'
+print('OK: zone 29 created on a newly allocated second zone page')
