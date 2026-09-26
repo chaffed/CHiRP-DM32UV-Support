@@ -330,6 +330,12 @@ driver `do_upload`: it wrote one page (`W 00 70 07 00 10`, tag 0x12 in place), g
 verified, and skipped every other page as unchanged. A full re-read against the backup: one page
 differs, in exactly 7 bytes (0x070–0x077, the name). The radio showed `WRITE OK` straight away.
 
+**Adding a channel (2026-09-26).** Channel 26 uploaded from the CHIRP GUI: the channel
+count in the page 0x12 header went 25 → 26 and the record was written in place; a re-read
+matched. But the radio only lists channels through **zones** (tag 0x5C), and channel 26
+is in none (zone 1 = 1–16, zone 2 = 17–25), so it does not appear on the radio. A new
+channel needs adding to a zone as well.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
