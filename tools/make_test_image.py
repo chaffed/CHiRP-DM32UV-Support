@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Build the synthetic CHIRP test image for the DM-32UV driver.
+
+Everything in it is made up here; no data from a real radio. Channels
+cover analog and DMR, all tone modes, duplex variants and power levels;
+there are two zones and short contact, RX group and key lists.
+
+    python3 make_test_image.py tests/images/Baofeng_DM-32UV.img
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'driver'))
+import baofeng_dm32uv as drv  # noqa: E402
+from chirp import chirp_common, memmap  # noqa: E402
+
+PAGE = drv.PAGE
+
+# number, name, freq (Hz), mode, duplex, offset, power, tone settings
+CHANNELS = [
+    (1, 'Simplex FM', 146520000, 'FM', '', 0, 2, {}),
+    (2, 'Rpt Tone', 146940000, 'FM', '-', 600000, 2,
+     {'tmode': 'Tone', 'rtone': 100.0}),
+    (3, 'Rpt TSQL', 147330000, 'FM', '+', 600000, 1,
+     {'tmode': 'TSQL', 'ctone': 131.8}),
+    (4, 'UHF DCS', 446000000, 'NFM', '', 0, 0,
+     {'tmode': 'DTCS', 'dtcs': 23, 'rx_dtcs': 23, 'dtcs_polarity': 'NN'}),
+    (5, 'DCS Rev', 446100000, 'NFM', '', 0, 0,
+     {'tmode': 'DTCS', 'dtcs': 754, 'rx_dtcs': 754, 'dtcs_polarity': 'RR'}),
+    (6, 'Cross', 145500000, 'FM', '', 0, 2,
+     {'tmode': 'Cross', 'cross_mode': 'Tone->DTCS', 'rtone': 88.5,
+      'rx_dtcs': 125}),
+    (7, 'UHF Rpt', 442100000, 'FM', '+', 5000000, 2,
+     {'tmode': 'Tone', 'rtone': 88.5}),
+    (8, 'Split', 144390000, 'FM', 'split', 145390000, 1, {}),
+    (9, 'RX only', 162550000, 'NFM', 'off', 0, 0, {}),
+    (10, 'DMR Local', 441000000, 'DMR', '+', 5000000, 2, {}),
+    (11, 'DMR TS2', 441000000, 'DMR', '+', 5000000, 2, {}),
+    (12, 'DMR Simplex', 441000000, 'DMR', '', 0, 1, {}),
+    (13, 'PMR 1', 446006250, 'NFM', '', 0, 0, {}),
+    (14, 'Odd step', 434043500, 'FM', '', 0, 2, {}),
+]
+DMR_EXTRA = {10: {'colorcode': 1, 'timeslot': '1', 'tx_contact': '1: Local',
+                  'rxgroup': '1: Local RX'},
+             11: {'colorcode': 1, 'timeslot': '2', 'tx_contact': '2: Worldwide',
+                  'rxgroup': '2: Wide RX'},
+             12: {'colorcode': 3, 'timeslot': '1', 'tx_contact': '3: Test Call'}}
+LISTS = {'contact': ['Local', 'Worldwide', 'Test Call'],
+         'rxgroup': ['Local RX', 'Wide RX'],
+         'privacy': ['Test key']}
+ZONES = [('Analog', [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14]),
+         ('Digital', [10, 11, 12])]
+
+
+def build():
+    radio = drv.DM32UV(memmap.MemoryMapBytes(b'\xff' * drv.DM32UV._memsize))
+    mmap = radio.get_mmap()
+    for kind, names in LISTS.items():
+        tag, first, size, length, _count = drv.DMR_LISTS[kind]
+        base = drv.IMAGE_TAGS.index(tag) * PAGE + first
+        for i, name in enumerate(names):
+            mmap.set(base + i * size, name.encode().ljust(length, b'\x00'))
+    for number, name, freq, mode, duplex, offset, power, tones in CHANNELS:
+        mem = chirp_common.Memory(number)
+        mem.name, mem.freq, mem.mode = name, freq, mode
+        mem.duplex, mem.offset = duplex, offset
+        mem.power = drv.POWER_LEVELS[power]
+        for key, value in tones.items():
+            setattr(mem, key, value)
+        radio.set_memory(mem)
+        if number in DMR_EXTRA:
+            mem = radio.get_memory(number)
+            for setting in mem.extra:
+                if setting.get_name() in DMR_EXTRA[number]:
+                    setting.value = DMR_EXTRA[number][setting.get_name()]
+            radio.set_memory(mem)
+    hdr = radio._memobj.zone_hdr
+    hdr.count = len(ZONES)
+    hdr.a_zone = hdr.a_pos = hdr.b_zone = hdr.b_pos = 1
+    for z, (name, members) in enumerate(ZONES, 1):
+        radio._zone(z).name = name.ljust(16, '\x00')
+        radio._set_zone_members(z, members)
+    # Every slot that now holds data needs its page tag, as on a radio.
+    for i, tag in enumerate(drv.IMAGE_TAGS):
+        slot = i * PAGE
+        if mmap.get(slot, PAGE - 1) != b'\xff' * (PAGE - 1):
+            mmap.set(slot + PAGE - 1, bytes([tag]))
+    return radio
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    radio = build()
+    radio.save_mmap(sys.argv[1])
+    print('%s: %d channels, %d zones' % (
+        sys.argv[1], radio._count(), radio._zone_count()))
+
+
+if __name__ == '__main__':
+    main()

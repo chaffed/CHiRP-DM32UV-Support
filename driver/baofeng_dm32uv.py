@@ -72,7 +72,6 @@ READ_COPIES, READ_TRIES = 3, 10
 # Upload writes channel pages only, one whole aligned page per W frame: the
 # firmware erases the sector on an aligned W and also erases the next sector
 # if a W crosses into it. Tags 0x02 and 0x69 look like calibration.
-UPLOAD_ENABLED = True
 UPLOAD_TAGS = list(range(0x12, 0x42)) + list(range(0x5C, 0x65))
 NEVER_WRITE = (0x02, 0x69)
 WRITE_TRIES = 3
@@ -584,9 +583,6 @@ class DM32UV(chirp_common.CloneModeRadio):
         self.process_mmap()
 
     def sync_out(self):
-        if not UPLOAD_ENABLED:
-            raise errors.RadioError('Uploading to the DM-32UV is not '
-                                    'supported yet by this driver')
         try:
             do_upload(self)
         except errors.RadioError:
@@ -614,9 +610,12 @@ class DM32UV(chirp_common.CloneModeRadio):
         return 0 if count > ZONE_COUNT else count
 
     def _zone_members(self, z):
+        if z > self._zone_count():
+            return []               # the spare zone, or erased flash
         zone = self._zone(z)
         count = min(int(zone.count), ZONE_MEMBERS)
-        return [int(m) for m in zone.members[0:count]]
+        return [int(m) for m in zone.members[0:count]
+                if 1 <= int(m) <= CH_COUNT]
 
     def _set_zone_members(self, z, members):
         zone = self._zone(z)
