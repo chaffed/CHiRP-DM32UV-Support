@@ -11,6 +11,24 @@ and is the largest part.
 Testing follows the project rule from 2026-09-27: CPS/firmware analysis plus simulator
 tests, and new features are labelled "simulator-tested; not checked on a radio".
 
+## Status (2026-09-27)
+
+- **Phase 0: done.** Every item has a simulator test (`tests/test_upload.py` 25–30).
+  Opening 4000 channels with 800 contacts now takes about 1 s instead of 35 s.
+- **Part A (passwords): not implemented, by decision.** CHIRP has no way to ask for a
+  password. Instead the driver refuses to upload to a radio with a write password, as it
+  already refused to download from one with a read password, and leaves the password
+  bytes as they are.
+- **Part B (APRS): done** (test 31). This radio's APRS is DMR position reporting only; the
+  CPS has no callsign fields. Channel +0x20 is the APRS report channel.
+- **Part C: done.** DTMF (test 32), two-tone (33) and five-tone (34), plus the per-channel
+  RX/TX signalling system (+0x27). The mapping step found:
+  - tag 0x03 holds both two-tone and five-tone, and tag 0x06 holds DTMF and BDC1200;
+  - tags 0x65/0x66 are roaming, not signalling, so they are not uploaded;
+  - BDC1200 (tag 0x06 from 0xA20) is kept as it is and not shown.
+- **Found along the way and fixed:** the programmable keys were assigned to the wrong keys
+  (TK/SK1 and P1/P3 swapped). The CPS keys dialog's control labels give the real order.
+
 ---
 
 ## Phase 0: fixes from the review

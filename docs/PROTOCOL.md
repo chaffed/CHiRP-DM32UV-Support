@@ -118,7 +118,7 @@ The codeplug is not one contiguous image. The flash between `V10.start` and
 
 | Tags | Pages | CPS buffer | Probable contents (unverified) |
 |------|-------|------------|-------------------------------|
-| 0x02, 0x03, 0x04, 0x06, 0x0A, 0x0B, 0x0F, 0x10, 0x11, 0x65, 0x66, 0x67 | 1 each | separate buffers | settings, zones, scan lists, etc. |
+| 0x02, 0x03, 0x04, 0x06, 0x0A, 0x0B, 0x0F, 0x10, 0x11, 0x65, 0x66, 0x67 | 1 each | separate buffers | 0x03 two-tone and five-tone, 0x04 radio settings, 0x06 DTMF (and BDC1200), 0x0B contact index, 0x0F RX groups, 0x10 emergency systems and encryption keys, 0x11 scan lists, 0x65/0x66 roaming (CPS roam channel/zone code), 0x67 radio IDs |
 | 0x12 – 0x41 | 48 | one 192 KB buffer | probably channels (for example 4000 × 48 B) |
 | 0x42 – 0x43 | 2 | | |
 | 0x44 – 0x48 | 5 | continues the tag 0x0B buffer at +0x1000 | |
@@ -219,7 +219,7 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x1E | byte | Encryption key | 0 none, n = entry n of the tag 0x10 key list (`[PrivacyType]` dialog). 1 on "Digital Encrypt". | data |
 | 0x1F | 6 | Encryption | checkbox | data |
 | 0x1F | 5–0 | RX group list | 0 none, n = list n of tag 0x0F. 1 on all digital channels. | data, upload |
-| 0x20 | byte | Unknown, 1–8 in the dialog (maybe APRS report channel) | index 0–7 | CPS |
+| 0x20 | byte | APRS report channel: one of the 8 report channels of the APRS settings (control 0x5a2, label "APRS Report Channel") | index 0–7 = 1–8 | CPS |
 | 0x21 | 2 bytes | CTC/DCS decode | see tones below | upload |
 | 0x23 | 2 bytes | CTC/DCS encode | see tones below | upload |
 | 0x25 | 5 | Compander | checkbox | CPS |
@@ -228,7 +228,7 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x26 | 7 | PTT ID Display | checkbox | CPS |
 | 0x26 | 6–4 | RX squelch mode | 0 Carrier/CTC, 1 Optional Signaling, 2 CTC & Opt., 3 CTC or Opt. | data |
 | 0x26 | 3–1 | Signaling type | 0 None, 1 DTMF, 2 Two Tone, 3 Five Tone, 4 BDC1200 | data |
-| 0x27 | 7–4, 3–0 | Signaling code selections, depending on signaling type (`0x414470`) | | CPS |
+| 0x27 | 7–4, 3–0 | RX signaling system (high nibble), TX signaling system (low nibble): None, or entry 1–8 for two-tone, 1–4 for BDC1200; unused for DTMF and five-tone (`0x414470`) | 0 = None | CPS |
 | 0x29 | 7–4 | Step | 2.5, 5, 6.25, 10, 12.5, 25, 50, 100 kHz `[ChannelStepFreq]` | CPS |
 | 0x29 | 3–2 | PTT ID | 0 Off, 1 BOT, 2 EOT, 3 Both `[ChannelPttId]` | data |
 | 0x2A | byte | Unknown, 1–8 in the dialog | index 0–7 | CPS |
@@ -329,7 +329,7 @@ plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
 | 0x81 | dual watch hang time | 0–6500 ms step 500 |
 | 0x85 | 3 forbid lock key, 2 side key lock, 1 knob lock, 0 keypad lock Manual/Auto | |
 | 0x86 | auto keypad lock delay 5–60 s | |
-| 0x87–0x92 | key functions (`[KeyFuncData]`, 43 entries), short/long pairs: TK, SK2, SK1, P3, P2, P1. The pairing is structural; which key owns which pair is inferred from the dialog's control order (the test radio's defaults fit: TK FM Radio/GPS, SK2 Monitor/Power) | |
+| 0x87–0x92 | key functions (`[KeyFuncData]`, 43 entries), short/long pairs: SK1, SK2, TK, P1, P2, P3. From the CPS keys dialog: the accessor behind each control (0x430760) and the control's label (DDX 0x430600). Corrected 2026-09-27: driver versions before then had TK/SK1 and P1/P3 swapped | |
 | 0x93 | long press time 1–5 | |
 | 0xA0 | TOT | Off, 15–495 s step 5 |
 | 0xA1 | TOT pre-alert | Off, 1–10 s |
@@ -338,13 +338,48 @@ plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
 | 0xA4 | 7–4 power save (None, 1:1, 1:2, 1:4), 2 weather alarm, 1 language (Chinese/English), 0 disable LEDs | |
 | 0xA5 | 7–4 TBST (1000/1450/1750/2100 Hz), 1–0 tail noise reduction (None, 120, 180, 55 Hz) | |
 | 0xA6, 0xA7 | analog mic level (1–5); digital mic (Enhance MIC 1–3, not decoded) | |
-| 0x301–0x333 | APRS (dialog `0x439c00`): latitude and longitude as ASCII at 0x306 and 0x310; see [PLAN.md](PLAN.md#part-b-aprs) | not in the driver yet |
+| 0x301 | APRS scheduled send time: Off, 30–7200 s step 30 | |
+| 0x302 | bit 0 fixed beacon | |
+| 0x306, 0x30F | latitude: 9 ASCII chars as the CPS formats it (`0%.06f` below 10, `%.06f` below 90, else `90.000000`); N/S | |
+| 0x310, 0x319 | longitude: 9 ASCII chars (`0%.06f` below 10, `%.06f` below 100, `%.05f` below 180, else `180.00000`); E/W | |
+| 0x31E | 8 × u16 report channels (0 = current channel, else a digital channel number) | |
+| 0x330 | repeater active delay: Off, 100–1000 ms step 100 | |
+| 0x331 | bit 0 call type (Private, Group) | |
+| 0x332 | upload number: u24 DMR ID (factory 456) | |
 | 0x430–0x44A | passwords: 0x430 power-on flag, 0x431 power-on password (8), 0x439 write flag, 0x43A read flag, 0x43B write password (8), 0x443 read password (8); flags 0xA5 = set | not in the driver (kept as read) |
 | 0x500–0x507 | menu items the radio shows (45 bits, labels from the CPS; 0x503 bits 0–1 unknown) | |
 
 *Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
 from 0x301, 32 × 44 bytes: 10-char name, type byte, key) are chosen per channel, not edited
 by the driver.
+
+### Signalling: DTMF (tag 0x06), two-tone and five-tone (tag 0x03)
+
+From the CPS dialogs (DTMF `0x421bc0`, two-tone `0x45a760`/`0x45ac30`/`0x45ae20`, five-tone
+`0x4254c0`/`0x426240`/`0x426590`), their accessors and DDX control labels. Codes are one
+digit value per byte, ended by 0xFF: DTMF uses 0–9, A–D = 10–13, `*` = 14, `#` = 15;
+five-tone uses hex digits 0–F.
+
+| Tag | Offset | Field |
+|-----|--------|-------|
+| 0x06 | 0x000 | 16 DTMF codes × 16 bytes |
+| 0x06 | 0x100–0x104 | pre-carrier (300–5000 ms step 50, stored + 15), first digit time (100–1000 ms step 50), send duration and interval (80–2000 ms step 10), auto reset (1–255 s, stored as seconds) |
+| 0x06 | 0x105 bit 0 | side tone |
+| 0x06 | 0x106 | self ID, 3 digits, left-padded with 0 |
+| 0x06 | 0x109–0x10E | group code (0xFF Off, else digit value A–#), interval sign (digit value), auto answer (Off, Alert Tone, Alert Tone And Ack), PTT ID pause (0 Off, else 5–75 s), —, dial code minimum duration (25–2500 ms step 25) |
+| 0x06 | 0x110, 0x120, 0x130, 0x140 | PTT ID up (BOT), PTT ID down (EOT), stun code, kill code; 16 digits each |
+| 0x06 | 0x1FF, 0x200 | DTMF (analog) contacts: count, then up to 64 × 0x20: 16-char name, 5 digits, 11 bytes (0 on the radio) |
+| 0x06 | 0xA20 on | BDC1200 system and ID lists (not in the driver; kept) |
+| 0x03 | 0x001 | two-tone encode count (1–32) |
+| 0x03 | 0x030–0x036 | two-tone pre-carrier (0–5.0 s), first and second tone (0.5–4.0 s), long tone (0.5–10.0 s), interval (0–2.0 s), —, polite wait (0–5.0 s); all in 0.1 s |
+| 0x03 | 0x037–0x03E | tones A–D, u16 in 0.1 Hz (the CPS allows 288.5–3106.8 Hz) |
+| 0x03 | 0x03F, 0x040 | bit 0 idle ack, bit 1 side tone; auto reset (1–255 s) |
+| 0x03 | 0x041 | 4 decode entries × 4 bytes: format code (0xFF None, 0x01 A-B … 0x3F Long D), call type, bit 0 reply |
+| 0x03 | 0x220 | 32 encode entries × 0x28: UTF-16 name (16 chars), bit 0 single tone, byte, tone 1, tone 2 (u16, 0.1 Hz) |
+| 0x03 | 0x730–0x73F | five-tone self ID (5 digits), decode standard, decode response (low nibble), pre-carrier (as DTMF), auto reset (stored s), delay after code (10–2550 ms, stored /10), PTT ID pause (as DTMF), first delay (stored /10), bit 0 side tone |
+| 0x03 | 0x750 | 8 message codes × 16: function, response (low nibble), 12 digits |
+| 0x03 | 0x7D0, 0x7F0 | PTT ID start (BOT) and end (EOT): 16 digits, standard, tone long (30–100 ms, stored /10) |
+| 0x03 | 0x820 | 32 special calls × 0x30: type (0xFF Off, 0 ANI, 1 data), 5 digits, delimiter, standard, tone long, —, 16 data digits, 16-char name |
 
 **Tones** (0x21, 0x23), two bytes; the second holds the flags:
 `ff ff` = none. CTCSS: tenths of a Hz as 4 BCD digits, little-endian

@@ -86,10 +86,15 @@ as `Fixes #NNNN`.
    radio tests: rely on CPS/firmware analysis + tests/fake_dm32uv.py, and label features
    "not checked on a radio" in docs. Item 7 (common radio settings, tag 0x04) done the same
    way. Item 9 (zone management on the Settings tab) done. Item 8 skipped (needs a .048
-   tester). Item 10 mostly done (keys, colours, GPS, recording, DMR options, menu items;
-   not APRS/signalling/passwords). Item 11 done: model ID DP570UV checked in
+   tester). Item 10 done per docs/PLAN.md (2026-09-27): review fixes (Phase 0), APRS,
+   DTMF, two-tone, five-tone; passwords skipped by the user's decision (CHIRP can't
+   enter them; the driver refuses radios with a read or write password). BDC1200 and
+   roaming (tags 0x65/0x66) not handled. Item 11 done: model ID DP570UV checked in
    detect_from_serial and before every transfer; untested firmware logs a warning.
-   Roadmap complete except 8 (needs a .048 tester) and the parts of 10 left out. Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
+   Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`) plus control labels from
+   each dialog's DDX function (`re/DecompCallers.java DDX_Control <member offsets>`, then
+   the control ID minus 1 in the language file's [Resource]). Ghidra prints some member
+   offsets in decimal (e.g. 800 for 0x320), so pick hex markers for the search.
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").

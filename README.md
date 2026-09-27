@@ -58,8 +58,9 @@ message before transferring anything.
   DM32.01.01.047. Save a backup first, and please report how it went in
   [issue #11840](https://chirpmyradio.com/issues/11840).
 
-**Not supported yet:** APRS settings, DTMF/two-tone/five-tone signalling setup, passwords,
-and editing encryption keys (you can choose one per channel). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
+**Not supported:** passwords (the driver refuses a radio that has one), BDC1200 and roaming
+settings, and editing encryption keys (you can choose one per channel). See the
+[roadmap](docs/ROADMAP.md).
 
 ## What works
 
@@ -75,6 +76,8 @@ radio back (only the expected bytes changed) and on the radio's own display.
 | **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (simulator-tested; not yet checked on a radio) |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
 | **Radio settings** (Settings tab) | Power-on screen and text, auto power off, tones, backlight, colours, menu time, dual watch, TOT, VOX, language, power save, TBST, mic level, programmable keys, DMR options, GPS, recording, which menu items show (simulator-tested; not yet checked on a radio) |
+| **APRS** (Settings tab) | DMR position reports: send interval, fixed position, upload number and call type, report channels; report channel per channel (simulator-tested; not yet checked on a radio) |
+| **DTMF, two-tone, five-tone** (Settings tab) | DTMF codes, PTT ID, stun/kill, timings and DTMF contacts; two-tone tones, timings, decode and encode lists; five-tone IDs, timings, message codes and special calls; signalling system per channel (simulator-tested; not yet checked on a radio) |
 | **Transfer** | Download; upload of only what changed, each page read back and checked |
 
 ## How we got here
