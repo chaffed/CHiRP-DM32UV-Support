@@ -419,6 +419,13 @@ and the radio showed both.
 Idle; channel 2: TX admit Color Code Idle. The diff was exactly ch 2 `+1a` `00` → `20`, ch 10
 `+1a` `00` → `10`, `+25` `00` → `10`, `+29` `00` → `04`, and the radio showed all four.
 
+**Deleted channel and gap (2026-09-27).** Channel 20 deleted in CHIRP (not "shift up") and channel
+30 added past the count (26), then channel 30 added to a zone. On the radio: record 20 all `ff`,
+removed from its zone and its TX contact cleared; records 27–29 erased (they held factory template
+data, 400.000 MHz, which would otherwise have become phantom channels); count 30; the zone lists
+channel 30 last. So an erased record inside 1..count is tolerated as long as nothing refers to it.
+**Scan lists** can still refer to a deleted channel; handled with roadmap item 6.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
