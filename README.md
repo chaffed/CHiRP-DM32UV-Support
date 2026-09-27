@@ -1,59 +1,117 @@
 # CHiRP DM-32UV Support
 
-Open-source programming support for the **Baofeng DM-32UV** DMR radio. The
-goal is a [CHIRP](https://chirpmyradio.com) driver: first as a standalone
-module you load into stock CHIRP, then submitted upstream.
+A [CHIRP](https://chirpmyradio.com) driver for the **Baofeng DM-32UV** DMR handheld, plus
+the tools and notes used to build it.
 
-> **Status: early.** The programming protocol has been reverse engineered from
-> the vendor's Windows software (CPS v1.60), but **it has not been checked
-> against a real radio yet.** No write support exists.
+> **Status:** download, upload, zones and the main DMR channel fields work, tested on a real
+> radio (firmware DM32.01.01.047). The driver has been submitted to CHIRP as
+> [pull request #1656](https://github.com/kk7ds/chirp/pull/1656)
+> (issue [#11840](https://chirpmyradio.com/issues/11840)). Until it is merged, you can load
+> it into CHIRP yourself as described below.
 
-## What's here
+## Use it in CHIRP now
+
+You need CHIRP (the current "next" build from
+[chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download)) and the
+programming cable that came with the radio.
+
+1. **Download the driver file**
+   [`baofeng_dm32uv.py`](https://raw.githubusercontent.com/chaffed/CHiRP-DM32UV-Support/main/driver/baofeng_dm32uv.py):
+   open the link and save the page (Ctrl+S). Keep the name `baofeng_dm32uv.py`.
+2. **Turn on developer mode** in CHIRP: **Help → Developer Mode**. Restart CHIRP if it
+   asks you to.
+3. **Load the driver**: **File → Load Module…** and pick `baofeng_dm32uv.py`.
+   CHIRP forgets loaded modules when it closes, so repeat this step each time you start CHIRP.
+4. **Download from the radio**: turn the radio on, connect the cable, then
+   **Radio → Download From Radio** with vendor **Baofeng** and model **DM-32UV**. It takes
+   about a minute.
+5. **Save a backup** straight away (**File → Save As**), before you change anything.
+6. Edit, then **Radio → Upload To Radio**.
+
+The radio goes back to normal by itself a few seconds after a download or upload; there is no
+need to switch it off and on.
+
+### Good to know
+
+- **Channels only show on the radio if they are in a zone.** In CHIRP, zones are in the
+  **Banks** tab. To make a new zone, tick channels into the last column, **"New zone"**.
+- **DMR settings** (color code, time slot, TX contact, RX group list, encryption key) are
+  extra fields: turn on **View → Show extra fields**, or open a channel's properties.
+- **What upload changes:** only the channel and zone data that differs from the radio. Every
+  page it writes is read back to check it. Radio-wide settings, contacts, RX group lists and keys
+  aren't changed.
+- **Cable:** the usual cable has a CH340 chip. On Linux it appears as `/dev/ttyUSB0`; add
+  yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log out and
+  back in). On macOS, Apple's built-in driver may not work; WCH's CH34x driver may help.
+- **Other firmware versions** haven't been tested. If yours isn't DM32.01.01.047, save a
+  backup first, and please report how it went in
+  [issue #11840](https://chirpmyradio.com/issues/11840).
+
+**Not supported yet:** radio-wide settings (menu options, welcome text, …), and editing the
+contact list, RX group lists and encryption keys (you can choose them per channel, but not
+edit them).
+
+## How it works, briefly
+
+The radio keeps its codeplug in 4 KB flash pages. The last byte of each page is a tag saying
+what the page holds, and the radio moves pages around as it rewrites them. The driver scans
+the tags and keeps a fixed "logical" image, one slot per tag.
+
+The programming cable tested here corrupts about 1 byte in 1000 on the way back from the
+radio, and the protocol has no checksums, so every block is read three times and the copies
+are merged byte by byte.
+
+For writing, the radio's firmware erases a whole 4 KB sector on each page write. So the driver
+only ever writes whole, aligned pages, reads each one back, and never touches pages that look
+like calibration data.
+
+All details are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+
+## What's in this repository
 
 | Path | Contents |
 |------|----------|
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The serial programming protocol: handshake, block commands, tagged-page codeplug layout |
-| [`tools/dm32uv_read.py`](tools/dm32uv_read.py) | Read-only tool that downloads the codeplug and logs all traffic |
-| [`tests/fake_radio.py`](tests/fake_radio.py) | Runs the tool against a simulated radio |
-| [`re/`](re/) | Headless Ghidra scripts used for the analysis |
+| [`driver/baofeng_dm32uv.py`](driver/baofeng_dm32uv.py) | The CHIRP driver (the file you load) |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Protocol, page layout, channel record, zones, DMR lists, firmware notes, test log |
+| [`tools/dm32uv_read.py`](tools/dm32uv_read.py) | Read-only dump tool; logs every byte. `--all-pages` makes a full backup |
+| [`tools/dm32uv_write.py`](tools/dm32uv_write.py) | Careful single-page writes (no-op test, restore one page from a backup); dry run unless `--yes` |
+| [`tools/dm32uv_diff.py`](tools/dm32uv_diff.py) | Compares two dumps page by page, labelling channel and VFO fields |
+| [`tools/dump_to_img.py`](tools/dump_to_img.py) | Turns a dump into a CHIRP image |
+| [`tools/make_test_image.py`](tools/make_test_image.py) | Builds the synthetic test image (made-up data only) |
+| [`tests/`](tests/) | A simulated radio modelled on the firmware, plus read, upload and write-tool tests |
+| [`re/`](re/) | Scripts for the analysis: Ghidra (vendor CPS) and C-SKY disassembly (radio firmware) |
 
-## Reading a radio
-
-The tool only reads. It never sends a write command.
-
-```sh
-pip install pyserial                                  # Debian: sudo apt install python3-serial
-python3 tools/dm32uv_read.py --list                   # find the cable's port
-python3 tools/dm32uv_read.py /dev/ttyUSB0 --probe -o probe1   # identify only
-python3 tools/dm32uv_read.py /dev/ttyUSB0 -o dump1            # full read
-```
-
-On Linux, add yourself to the `dialout` group to use the port. Each run saves
-`traffic.log` (every byte sent and received), `info.json`, and the pages it read.
-Please attach these to an issue if something fails.
-
-The usual cable uses a CH340 chip. It works with Linux's `ch341` driver. On
-macOS, Apple's built-in driver may reject serial settings with
-`Invalid argument`. WCH's CH34xVCPDriver may fix that.
-
-## Reproducing the analysis
-
-The scripts in `re/` need [Ghidra](https://ghidra-sre.org) (tested with 12.1)
-and a copy of the vendor CPS. The CPS isn't included here; get it from
-Baofeng. `DMR CPS.exe` is file `16` in the extracted v1.60 installer.
+### Running the tests
 
 ```sh
-cd re
-GHIDRA_HOME=/path/to/ghidra CPS_EXE=/path/to/16 ./run_decomp.sh out.c 0044a210
-python3 callsites.py 0x44a210 0x44c700    # send/recv lengths and timeouts
+python3 -m venv .venv && .venv/bin/pip install pyserial
+.venv/bin/pip install -e /path/to/chirp        # a clone of github.com/kk7ds/chirp
+.venv/bin/python tests/fake_radio.py
+.venv/bin/python tests/test_upload.py
+.venv/bin/python tests/test_write_tool.py
 ```
 
-## Roadmap
+### Reading a radio without CHIRP
 
-1. Confirm the read protocol against a real radio
-2. Map the codeplug pages (channels, zones, contacts, settings) by diffing reads
-3. CHIRP driver module: download, upload, channels
-4. Submit upstream to CHIRP
+```sh
+python3 tools/dm32uv_read.py --list                            # find the cable's port
+python3 tools/dm32uv_read.py /dev/ttyUSB0 --probe -o probe1    # identify only
+python3 tools/dm32uv_read.py /dev/ttyUSB0 -o dump1             # full read
+python3 tools/dm32uv_diff.py dump1 dump2                       # what changed between reads
+```
+
+Dumps contain personal data (radio ID, contacts), so don't publish them. `.gitignore` keeps
+them out of git.
+
+### Reproducing the analysis
+
+The vendor software and firmware aren't included here; download them from Baofeng.
+
+- **CPS (Windows programming software):** `re/run_decomp.sh` with
+  [Ghidra](https://ghidra-sre.org) 12.1. `DMR CPS.exe` is file `16` in the extracted v1.60
+  installer.
+- **Radio firmware:** `re/fw_disasm.sh` disassembles it. It is unencrypted C-SKY code and needs
+  `csky-elf` binutils; the script explains how to build them.
 
 ## License
 
