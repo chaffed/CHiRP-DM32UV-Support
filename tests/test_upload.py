@@ -465,3 +465,34 @@ r21.set_settings(r21.get_settings())
 n, writes, _ = upload(r21, flash, 50)
 assert n == 0 and not writes, writes
 print('OK: radio settings uploaded; display state kept; unchanged settings write nothing')
+
+# 22. Zone management on the Settings tab: channel order in a zone, delete a
+#     zone in the middle, swap zones; the radio's current-zone pointers follow.
+r22 = download(flash, 51)
+zl = r22._zone_list()
+assert len(zl) >= 5, len(zl)
+hdr = r22._memobj.zone_hdr
+hdr.a_zone, hdr.a_pos, hdr.b_zone, hdr.b_pos = 5, 1, 2, 1
+settings = r22.get_settings()
+st = settings_dict(settings)
+st['zone_1_members'].value = ', '.join(map(str, reversed(zl[0][1])))
+st['zone_5_members'].value = ''                        # delete zone 5
+order = [2, 1] + list(range(3, len(zl) + 1))
+st['zone_order'].value = ', '.join(map(str, order))
+r22.set_settings(settings)
+new = r22._zone_list()
+expect = [zl[1], (zl[0][0], list(reversed(zl[0][1])))] + [
+    zl[z - 1] for z in range(3, len(zl) + 1) if z != 5]
+assert new == expect, (new[:4], expect[:4])
+assert (int(hdr.a_zone), int(hdr.b_zone)) == (1, 1), (int(hdr.a_zone), int(hdr.b_zone))
+upload(r22, flash, 52)
+assert download(flash, 53)._zone_list() == expect
+for bad, text in (('zone_order', '1, 1'), ('zone_1_members', '9999'), ('zone_order', 'x')):
+    settings = r22.get_settings()
+    settings_dict(settings)[bad].value = text
+    try:
+        r22.set_settings(settings)
+        raise AssertionError('accepted %s=%r' % (bad, text))
+    except errors.InvalidValueError:
+        pass
+print('OK: zones reordered and deleted from the Settings tab; pointers follow; bad input refused')

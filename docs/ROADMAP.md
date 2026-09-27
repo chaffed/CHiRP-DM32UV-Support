@@ -17,7 +17,7 @@ for the work; **risk** is the chance of harming a radio's data if the feature is
 | 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | **done** (simulator-tested; not checked on a radio) |
 | 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | **done** (simulator-tested; not checked on a radio) |
 | 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low | |
-| 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | |
+| 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | **done** (simulator-tested; not checked on a radio) |
 | 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium | |
 | 11 | [Automatic radio detection](#11-automatic-radio-detection) | Low | S | Low | |
 

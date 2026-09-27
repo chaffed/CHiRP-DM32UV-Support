@@ -34,7 +34,9 @@ need to switch it off and on.
 ### Good to know
 
 - **Channels only show on the radio if they are in a zone.** In CHIRP, zones are in the
-  **Banks** tab. To make a new zone, tick channels into the last column, **"New zone"**.
+  **Banks** tab. To make a new zone, tick channels into the last column, **"New zone"**. To
+  change the order of channels in a zone, reorder zones or delete one, use **Settings → Zones**
+  (then reopen the image before using the Banks tab again).
 - **DMR settings** per channel (color code, time slot, TX contact, radio ID, RX group list,
   encryption key) are extra fields: turn on **View → Show extra fields**, or open a channel's
   properties.
@@ -64,7 +66,7 @@ radio back (only the expected bytes changed) and on the radio's own display.
 | **Channels** (1–4000) | Name, RX/TX frequency, duplex and offset, power (Low/Middle/High), FM/NFM/DMR, CTCSS and DCS tones, adding channels |
 | **DMR per channel** | Color code, time slot, TX contact, radio ID, RX group list, encryption on/off and key |
 | **Channel options** | TX admit, RX squelch mode, signaling type, PTT ID, VOX, compander, APRS, emergency, TDMA direct and more, as extra fields |
-| **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
+| **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones. On the Settings tab: channel order within a zone, zone order, deleting any zone (simulator-tested) |
 | **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (simulator-tested; not yet checked on a radio) |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
 | **Radio settings** (Settings tab) | Power-on screen and text, auto power off, tones, backlight, menu time, dual watch, TOT, VOX, language, power save, TBST, mic level (simulator-tested; not yet checked on a radio) |
