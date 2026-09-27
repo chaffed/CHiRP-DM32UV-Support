@@ -1,4 +1,4 @@
-# Copyright 2026 The CHIRP DM-32UV driver authors
+# Copyright 2026 chaffed
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +15,11 @@
 
 """Baofeng DM-32UV (DMR) driver.
 
-Download and upload work. Upload writes only the channel pages, and only
-those that differ from the radio, and reads every written page back. The
-protocol and memory layout are described in docs/PROTOCOL.md of the
-CHiRP-DM32UV-Support project.
+Channels, zones (as banks) and the main DMR channel fields. Upload writes
+only the channel and zone pages that differ from the radio, one whole
+aligned 4 KB page per write, and reads every written page back. The
+layout was worked out from the vendor CPS (v1.60) and radio firmware and
+checked against a real radio (firmware DM32.01.01.047).
 
 The radio keeps its codeplug in 4 KB flash pages whose last byte is a tag
 naming the contents; pages move around as the radio rewrites them. The
