@@ -46,6 +46,7 @@ def build_radio():
     blank._set_radio_ids([(1111111, 'Me'), (2222222, 'Club')])
     blank._set_contacts({1: ('Alice', 3100, 1), 2: ('Bob TG', 91, 1)})
     blank._set_rx_groups({1: ('Group A', [3100]), 2: ('Group B', [91, 3100])})
+    blank._set_scan_lists([('Scan A', [1, 2, 90], drv.SCAN_DEFAULT_OPTS)])
     tag, first, size, length, _count = drv.DMR_LISTS['privacy']
     base = drv.IMAGE_TAGS.index(tag) * PAGE + first
     blank.get_mmap().set(base, b'Key 1'.ljust(length, b'\x00'))
@@ -59,7 +60,7 @@ def build_radio():
              0x5C: (0x040000, slot(0x5C)),
              0x67: (0x009000, slot(0x67)), 0x0F: (0x00F000, slot(0x0F)),
              0x10: (0x00C000, slot(0x10)), 0x0B: (0x00D000, slot(0x0B)),
-             0x44: (0x00E000, slot(0x44))}
+             0x44: (0x00E000, slot(0x44)), 0x11: (0x014000, slot(0x11))}
     flash = fake.make_flash(pages, stale=(0x010000, 0x023000))
     return flash, pages
 
@@ -395,3 +396,42 @@ r17 = download(flash, 40)
 assert [r17.get_memory(n).empty for n in (count + 1, count + 2)] == [True, True]
 assert r17.get_memory(count + 3).name == 'After gap'
 print('OK: channels skipped by a new channel read as empty')
+
+
+# 20. Scan lists: edit members and modes, add a list, pick one per channel,
+#     delete a channel that is in a list, delete a list channels use.
+r18 = download(flash, 41)
+assert [(n, m) for n, m, _o in r18._scan_lists()] == [('Scan A', [1, 2, 90])]
+settings = r18.get_settings()
+st = settings_dict(settings)
+st['scan_1_members'].value = '2, 90, 1'
+st['scan_1_ctc'].value = 'Not Detection CTC'
+st['scan_1_tx'].value = 'Designed Channel'
+st['scan_2_name'].value = 'Scan B'                  # the spare row: new list
+st['scan_2_members'].value = '3'
+r18.set_settings(settings)
+edit(r18, 3, name=r18.get_memory(3).name)          # no-op
+m = r18.get_memory(3)
+[x for x in m.extra if x.get_name() == 'scanlist'][0].value = '2: Scan B'
+r18.set_memory(m)
+upload(r18, flash, 42)
+r19 = download(flash, 43)
+lists = r19._scan_lists()
+assert [(n, mb) for n, mb, _o in lists] == [('Scan A', [2, 90, 1]), ('Scan B', [3])], lists
+assert lists[0][2][0] == 0x20, 'CTC/TX mode byte'
+opts = lists[0][2]                                  # designed channel (3-4) may follow
+assert opts[1:3] + opts[5:] == drv.SCAN_DEFAULT_OPTS[1:3] + drv.SCAN_DEFAULT_OPTS[5:], \
+    'other options must be kept'
+assert int(r19._chan(3).scanlist) == 2
+m = r19.get_memory(90)
+m.empty = True
+r19.set_memory(m)                                   # delete a scan list member
+assert r19._scan_lists()[0][1] == [2, 1]
+settings = r19.get_settings()
+settings_dict(settings)['scan_1_name'].value = ''   # delete list 1
+r19.set_settings(settings)
+assert [n for n, _m, _o in r19._scan_lists()] == ['Scan B']
+assert int(r19._chan(3).scanlist) == 1, 'channel must follow Scan B to number 1'
+upload(r19, flash, 44)
+assert [n for n, _m, _o in download(flash, 45)._scan_lists()] == ['Scan B']
+print('OK: scan lists edited, created, deleted; channel refs follow; deleted channel removed')

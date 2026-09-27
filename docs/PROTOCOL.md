@@ -271,6 +271,27 @@ bits 8–11, bit 0 = channel is digital; second byte = slot bits 0–7. 0 = none
 used groups; group n at 0x6D × n − 0x5C: 11-char name, 32 members as **u24 LE DMR IDs**
 (not contact slots), 2 unknown bytes (and one before each record, `01` before group 1).
 
+*Scan lists* (tag 0x11; up to 32; CPS `0x483050`–`0x484160`, export `0x4ad9c0`): byte 0 =
+number of lists; list n at 0x39 × n − 0x38 (57 bytes):
+
+| Offset | Contents |
+|--------|----------|
+| +0x00 | name, 11 bytes |
+| +0x0B | number of members (max 16) |
+| +0x0C | low nibble CTC scan mode (`[ScanCtcDcsMode]`), high nibble scan TX mode (`[ScanTxMode]`) |
+| +0x0D | hang time (CPS shows (value) × 5 units) |
+| +0x0E | priority types (nibbles) |
+| +0x0F | u16 designed channel |
+| +0x11, +0x13 | u16 priority channels 1 and 2 (encoding not fully known) |
+| +0x15 | bit 1 talkback, bits 2–7 priority sweep time |
+| +0x16, +0x17 | unknown |
+| +0x18 | up to 16 × u16 channel numbers |
+
+The members start at +0x18 itself. The CPS accessors seemed to start one slot later, but
+the radio's own display settles it: factory Scan List 2 (`1 … 9`, count 9) shows channels
+1–9, and Scan List 1 (count 16) shows 1–15 with 15 twice, exactly as stored. The driver keeps
+unused list slots and the option bytes it doesn't know as they are.
+
 *Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
 from 0x301, 32 × 44 bytes: 10-char name, type byte, key) are chosen per channel, not edited
 by the driver.

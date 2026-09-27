@@ -3,7 +3,8 @@
 
 Everything in it is made up here; no data from a real radio. Channels
 cover analog and DMR, all tone modes, duplex variants and power levels;
-there are two zones, radio IDs, contacts, RX group lists and a key.
+there are two zones, two scan lists, radio IDs, contacts, RX group lists
+and a key.
 
     python3 make_test_image.py tests/images/Baofeng_DM-32UV.img
 """
@@ -41,8 +42,10 @@ CHANNELS = [
     (13, 'PMR 1', 446006250, 'NFM', '', 0, 0, {}),
     (14, 'Odd step', 434043500, 'FM', '', 0, 2, {}),
 ]
-DMR_EXTRA = {10: {'colorcode': 1, 'timeslot': '1', 'tx_contact': '1: Local',
-                  'rxgroup': '1: Local RX', 'radio_id': '1: Main (1234567)'},
+DMR_EXTRA = {1: {'scanlist': '1: Analog scan'},
+             10: {'colorcode': 1, 'timeslot': '1', 'tx_contact': '1: Local',
+                  'rxgroup': '1: Local RX', 'radio_id': '1: Main (1234567)',
+                  'scanlist': '2: DMR scan'},
              11: {'colorcode': 1, 'timeslot': '2', 'tx_contact': '2: Worldwide',
                   'rxgroup': '2: Wide RX'},
              12: {'colorcode': 3, 'timeslot': '1', 'tx_contact': '3: Test Call',
@@ -53,6 +56,7 @@ RADIO_IDS = [(1234567, 'Main'), (7654321, 'Spare')]
 CONTACTS = {1: ('Local', 9, 1), 2: ('Worldwide', 91, 1),
             3: ('Test Call', 1000001, 0), 4: ('All Call', 16777215, 2)}
 RX_GROUPS = {1: ('Local RX', [9]), 2: ('Wide RX', [9, 91])}
+SCAN_LISTS = [('Analog scan', [1, 2, 3, 4, 5, 7]), ('DMR scan', [10, 11, 12])]
 LISTS = {'privacy': ['Test key']}
 ZONES = [('Analog', [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14]),
          ('Digital', [10, 11, 12])]
@@ -69,6 +73,8 @@ def build():
     radio._set_radio_ids(RADIO_IDS)
     radio._set_contacts(CONTACTS)
     radio._set_rx_groups(RX_GROUPS)
+    radio._set_scan_lists([(name, members, drv.SCAN_DEFAULT_OPTS)
+                           for name, members in SCAN_LISTS])
     for number, name, freq, mode, duplex, offset, power, tones in CHANNELS:
         mem = chirp_common.Memory(number)
         mem.name, mem.freq, mem.mode = name, freq, mode

@@ -39,8 +39,8 @@ need to switch it off and on.
   encryption key) are extra fields: turn on **View → Show extra fields**, or open a channel's
   properties.
 - **Your DMR IDs, contacts (talkgroups) and RX group lists** are on CHIRP's **Settings**
-  tab, under "DMR lists". Leave a name empty to delete an entry; empty rows at the end are
-  for adding new ones.
+  tab, under "DMR lists". **Scan lists** are there too. Leave a name empty to delete an
+  entry; empty rows at the end are for adding new ones.
 - **What upload changes:** only the channels, zones, radio IDs, contacts and RX group lists
   that differ from the radio. Every page it writes is read back to check it. Radio-wide settings
   and encryption keys aren't changed.
@@ -65,6 +65,7 @@ radio back (only the expected bytes changed) and on the radio's own display.
 | **DMR per channel** | Color code, time slot, TX contact, radio ID, RX group list, encryption on/off and key |
 | **Channel options** | TX admit, RX squelch mode, signaling type, PTT ID, VOX, compander, APRS, emergency, TDMA direct and more, as extra fields |
 | **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
+| **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (radio check pending) |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
 | **Transfer** | Download; upload of only what changed, each page read back and checked |
 

@@ -13,8 +13,8 @@ for the work; **risk** is the chance of harming a radio's data if the feature is
 | 2 | [Talkgroup / contact list editing](#2-talkgroup--contact-list-editing) | Very high | M | Medium | **done** |
 | 3 | [RX group list editing](#3-rx-group-list-editing) | High | S | Low | **done** |
 | 4 | [Remaining channel options](#4-remaining-channel-options) | Medium | S | Low | **done** |
-| 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium | **done** (scan-list clean-up with #6) |
-| 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | |
+| 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium | **done** |
+| 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | **done** (radio test pending) |
 | 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | |
 | 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low | |
 | 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | |
