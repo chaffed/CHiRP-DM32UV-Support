@@ -6,7 +6,8 @@ Adds a driver for the Baofeng DM-32UV DMR handheld. Fixes #11840.
 
 **What it supports**
 - Download and upload, channels 1–4000: name, frequencies, duplex, 3 power levels, FM/NFM/DMR, CTCSS/DCS.
-- Per-channel extras: channel type, color code, time slot, TX contact / RX group list / encryption key (chosen by name from the radio's lists), squelch, forbid TX, talkaround.
+- Per-channel extras: channel type, color code, time slot, TX contact, radio ID, RX group list, encryption key (chosen by name from the radio's lists), squelch, forbid TX, talkaround.
+- Settings tab "DMR lists": edit the radio's own DMR IDs, the contact list (name, ID, call type; up to 800) and RX group lists. Contact edits rebuild the contact index the same way the vendor CPS does. (Second commit.)
 - Zones as banks. The model offers one spare "New zone" bank; adding a channel to it creates the next zone.
 
 **Radio specifics a reviewer may want to know**
@@ -19,7 +20,7 @@ Adds a driver for the Baofeng DM-32UV DMR handheld. Fixes #11840.
   - never writes pages that look like calibration.
 
 **Testing**
-- On a real radio (firmware DM32.01.01.047): downloads were byte-identical to an independent reader. Uploads of names, tones, power, DMR contact / RX group / time slot, zone membership and a new zone were each verified by a full re-read and on the radio's display.
+- On a real radio (firmware DM32.01.01.047): downloads were byte-identical to an independent reader. Uploads of names, tones, power, time slot, zone membership, a new zone, a contact rename, an RX group edit and the per-channel TX contact / radio ID were each verified by a full re-read (only the expected bytes changed) and on the radio's display.
 - Outside CHIRP, the upload logic was tested against a simulator of the radio firmware's programming protocol, including a noisy link and injected write errors.
 - `tests/images/Baofeng_DM-32UV.img` is synthetic (generated; no real user data).
 - `tox` style, unit and driver jobs pass locally.
