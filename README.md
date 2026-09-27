@@ -51,8 +51,8 @@ need to switch it off and on.
   backup first, and please report how it went in
   [issue #11840](https://chirpmyradio.com/issues/11840).
 
-**Not supported yet:** radio-wide settings (menu options, welcome text, …) and editing
-encryption keys (you can choose one per channel). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
+**Not supported yet:** some radio settings (display colours, keys, GPS/APRS, menu
+permissions, DMR options) and editing encryption keys (you can choose one per channel). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
 
 ## What works
 
@@ -67,6 +67,7 @@ radio back (only the expected bytes changed) and on the radio's own display.
 | **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
 | **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (simulator-tested; not yet checked on a radio) |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
+| **Radio settings** (Settings tab) | Power-on screen and text, auto power off, tones, backlight, menu time, dual watch, TOT, VOX, language, power save, TBST, mic level (simulator-tested; not yet checked on a radio) |
 | **Transfer** | Download; upload of only what changed, each page read back and checked |
 
 ## How we got here

@@ -84,7 +84,9 @@ as `Fixes #NNNN`.
    per-channel scan list, deleted channels removed from lists) implemented and
    simulator-tested, not checked on the radio. From here on the user has chosen to skip manual
    radio tests: rely on CPS/firmware analysis + tests/fake_dm32uv.py, and label features
-   "not checked on a radio" in docs. Next: common radio settings (7). Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
+   "not checked on a radio" in docs. Item 7 (common radio settings, tag 0x04) done the same
+   way. Next: 8 (firmware .048 check, needs a tester), 9 (zone polish), 10 (remaining
+   settings). Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").

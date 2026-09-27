@@ -57,6 +57,13 @@ CONTACTS = {1: ('Local', 9, 1), 2: ('Worldwide', 91, 1),
             3: ('Test Call', 1000001, 0), 4: ('All Call', 16777215, 2)}
 RX_GROUPS = {1: ('Local RX', [9]), 2: ('Wide RX', [9, 91])}
 SCAN_LISTS = [('Analog scan', [1, 2, 3, 4, 5, 7]), ('DMR scan', [10, 11, 12])]
+SETTINGS = [('set_power', 'poweron_type', 1), ('set_power', 'line1', 'CHIRP TEST' + '\x00' * 4),
+            ('set_power', 'line2', 'DM-32UV' + '\x00' * 7), ('set_power', 'key_tone', 1),
+            ('set_power', 'voice_prompt', 1), ('set_opts', 'tot', 22),
+            ('set_opts', 'vox_level', 2), ('set_opts', 'vox_delay', 10),
+            ('set_opts', 'language', 1), ('set_opts', 'tbst', 2),
+            ('set_display', 'backlight', 4), ('set_display', 'menu_exit', 2),
+            ('set_work', 'dual_watch', 2), ('set_work', 'dual_watch_hang', 1)]
 LISTS = {'privacy': ['Test key']}
 ZONES = [('Analog', [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14]),
          ('Digital', [10, 11, 12])]
@@ -70,6 +77,10 @@ def build():
         base = drv.IMAGE_TAGS.index(tag) * PAGE + first
         for i, name in enumerate(names):
             mmap.set(base + i * size, name.encode().ljust(length, b'\x00'))
+    # A settings page (tag 0x04) with plausible values.
+    radio._put(0x04, 0, b'\x00' * (PAGE - 1))
+    for sname, field, value in SETTINGS:
+        setattr(getattr(radio._memobj, sname), field, value)
     radio._set_radio_ids(RADIO_IDS)
     radio._set_contacts(CONTACTS)
     radio._set_rx_groups(RX_GROUPS)

@@ -70,11 +70,11 @@ code, writes, out = run('--restore', os.path.join(tmp, 'backup'), '--tag', '12',
 assert code == 0 and not writes and 'nothing to do' in out, out
 print('OK: restore of an identical page writes nothing')
 
-# 5. Non-channel tags are refused before anything is sent.
-for tag in ('02', '69', '04'):
+# 5. Tags the driver never uploads are refused before anything is sent.
+for tag in ('02', '69', '03'):
     code, writes, out = run('--noop', tag, '--yes', seed=5)
-    assert code == 2 and not writes and 'only channel pages' in out, out
-print('OK: tags 02, 69 and 04 refused')
+    assert code == 2 and not writes and 'only pages the driver uploads' in out, out
+print('OK: tags 02, 69 and 03 refused')
 
 # 6. A tag the radio has no page for is refused.
 code, writes, out = run('--noop', '20', '--yes', seed=6)

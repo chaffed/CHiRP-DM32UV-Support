@@ -15,7 +15,7 @@ for the work; **risk** is the chance of harming a radio's data if the feature is
 | 4 | [Remaining channel options](#4-remaining-channel-options) | Medium | S | Low | **done** |
 | 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium | **done** |
 | 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | **done** (simulator-tested; not checked on a radio) |
-| 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | |
+| 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | **done** (simulator-tested; not checked on a radio) |
 | 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low | |
 | 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | |
 | 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium | |

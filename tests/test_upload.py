@@ -435,3 +435,33 @@ assert int(r19._chan(3).scanlist) == 1, 'channel must follow Scan B to number 1'
 upload(r19, flash, 44)
 assert [n for n, _m, _o in download(flash, 45)._scan_lists()] == ['Scan B']
 print('OK: scan lists edited, created, deleted; channel refs follow; deleted channel removed')
+
+
+# 21. Radio settings (tag 0x04): change a few, upload, read back; the radio's
+#     current A/B display state in byte 0x80 must survive the upload.
+r20 = download(flash, 46)
+SP = pages[0x04][0]
+settings = r20.get_settings()
+st = settings_dict(settings)
+st['set_set_opts_tot'].value = '180 s'
+st['set_set_opts_vox_delay'].value = '0.5 s'
+st['set_set_power_line1'].value = 'Hello'
+st['set_set_power_key_tone'].value = not st['set_set_power_key_tone'].value.get_value()
+st['set_set_work_dual_watch'].value = 'Double Wait'
+r20.set_settings(settings)
+flash[SP + 0x80] ^= 0x3E                               # someone browsed on the radio
+radio_state = flash[SP + 0x80] & 0x3E
+n, writes, _ = upload(r20, flash, 47)
+assert [(a, ln) for _, a, ln in writes] == [(SP, PAGE)], writes
+got = {k: v.value.get_value() for k, v in settings_dict(download(flash, 48).get_settings()).items()
+       if k.startswith('set_')}
+assert got['set_set_opts_tot'] == '180 s' and got['set_set_opts_vox_delay'] == '0.5 s'
+assert got['set_set_power_line1'] == 'Hello' and got['set_set_work_dual_watch'] == 'Double Wait'
+assert flash[SP + 0x80] & 0x3E == radio_state, 'radio display state overwritten'
+assert flash[SP + 0xA3] == 5, 'VOX delay is stored as value + 3'
+# applying the settings tab unchanged writes nothing
+r21 = download(flash, 49)
+r21.set_settings(r21.get_settings())
+n, writes, _ = upload(r21, flash, 50)
+assert n == 0 and not writes, writes
+print('OK: radio settings uploaded; display state kept; unchanged settings write nothing')

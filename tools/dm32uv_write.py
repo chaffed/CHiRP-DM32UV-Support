@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Careful single-page writes to a DM-32UV, for testing the write path.
 
-Only channel pages (tags 0x12-0x41) can be written. Every write goes through
+Only pages the driver itself uploads can be written (channels, zones, settings
+page 0x04, DMR and scan lists; never 0x02/0x69). Every write goes through
 the driver's guarded _write_page (one whole aligned page, read back until
 it matches). The page tags are scanned before and after, and the tool
 reports any change. Without --yes nothing is written (dry run).
@@ -132,7 +133,8 @@ def main():
     if args.tag is None:
         ap.error('--restore needs --tag')
     if args.tag not in drv.UPLOAD_TAGS:
-        ap.error('only channel pages (tags 12-41) can be written')
+        ap.error('only pages the driver uploads can be written '
+                 '(not calibration-like or unknown pages)')
 
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, 'traffic.log'), 'w') as log:

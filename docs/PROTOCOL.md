@@ -292,6 +292,43 @@ the radio's own display settles it: factory Scan List 2 (`1 … 9`, count 9) sho
 1–9, and Scan List 1 (count 16) shows 1–15 with 15 twice, exactly as stored. The driver keeps
 unused list slots and the option bytes it doesn't know as they are.
 
+### Radio settings (tag 0x04)
+
+From the CPS option dialogs: each dialog fills a combo from a language section (or a number
+range) and sets it from one accessor, and checkboxes carry control IDs whose labels are in
+`[Resource]`. Stored values are the list positions unless noted. Decoding the test radio gave
+plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
+
+| Offset | Field | Values |
+|--------|-------|--------|
+| 0x00 | power-on screen | Power On Picture, Custom Message, Battery Volt |
+| 0x01, 0x0F | power-on text lines 1 and 2 | 14 chars each |
+| 0x1D bit 0 | allow reset | |
+| 0x1E | auto power off | Off, 30/60/120/240/480 min |
+| 0x20 | tone bits: 7 radio silent, 6 key tone, 5 SMS alert, 4 group call, 3 private call, 2 call end, 1 talk permit, 0 startup sound | |
+| 0x21 | 7 voice prompt, 6 battery low, 5–4 analog TX end tone (Off, Tone, BDC) | |
+| 0x30 | backlight brightness | 1–6 |
+| 0x31 | auto backlight duration | not decoded |
+| 0x32 | menu exit time | Off, 5–60 s step 5 |
+| 0x33 | 4 volume change prompt, 3 date format, 0 time display | |
+| 0x34, 0x35, 0x38–0x3B | display colours (`[DisplayColor]`) | not in the driver yet |
+| 0x36, 0x37 | TX backlight delay (Off, 1–30), RX backlight delay (Always, 1–30) | |
+| 0x40–0x45 | GPS and record options | not in the driver yet |
+| 0x60–0x67 | DMR options (call match, decodes, data service, name format) | not in the driver yet |
+| 0x80 | 7–6 dual watch (Single, Double Wait, Single Wait), 5 main line A/B, 4/3 B/A display mode, 2/1 B/A work mode (VFO/MR), 0 only channel mode | bits 1–5 are the radio's live display state: upload keeps the radio's own |
+| 0x81 | dual watch hang time | 0–6500 ms step 500 |
+| 0x85–0x93 | key lock and programmable keys (`[KeyFuncData]`) | not in the driver yet |
+| 0xA0 | TOT | Off, 15–495 s step 5 |
+| 0xA1 | TOT pre-alert | Off, 1–10 s |
+| 0xA2 | VOX level | 1–5 |
+| 0xA3 | VOX delay | stored value − 3 = list position; 0.3–5.0 s (units assumed) |
+| 0xA4 | 7–4 power save (None, 1:1, 1:2, 1:4), 2 weather alarm, 1 language (Chinese/English), 0 disable LEDs | |
+| 0xA5 | 7–4 TBST (1000/1450/1750/2100 Hz), 1–0 tail noise reduction (None, 120, 180, 55 Hz) | |
+| 0xA6, 0xA7 | analog mic level (1–5); digital mic (Enhance MIC 1–3, not decoded) | |
+| 0x300–0x332 | APRS | not in the driver yet |
+| 0x430–0x443 | power-on / read / write passwords | not in the driver (never touch) |
+| 0x500–0x507 | menu permissions (which menu items the radio shows) | not in the driver yet |
+
 *Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
 from 0x301, 32 × 44 bytes: 10-char name, type byte, key) are chosen per channel, not edited
 by the driver.
