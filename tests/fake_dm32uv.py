@@ -4,7 +4,9 @@ Behaviour follows docs/PROTOCOL.md ("Radio firmware"): frames are parsed
 from the byte stream; W erases the sector first when the address is 4 KB
 aligned and erases the next sector if the data crosses into it; flash
 programming can only clear bits; S/G use a separate memory; a session ends
-(and the radio resets) when the host stops talking, modelled by close().
+when the host is silent for 2 s: tests route time.sleep to virtual_sleep()
+so the driver's waits count, and close() ends it too. PASSSTA reports the
+password flags from the settings page (tag 0x04, bytes 0x439/0x43A).
 
 Anything our tools must never do is recorded in `violations`: a W that is
 not exactly one aligned 4 KB page inside the codeplug area, a W to a page
@@ -19,6 +21,16 @@ CP_START, CP_END = 0x001000, 0x0C8FFF          # values seen on a real radio
 CT_START, CT_END = 0x278000, 0x6DBFFF
 PAGE = 0x1000
 PROTECTED_TAGS = (0x02, 0x69)
+
+SESSION_IDLE = 2.0            # seconds of silence that end a session
+_LIVE = []                    # the radio most recently connected
+
+
+def virtual_sleep(seconds):
+    """Stand-in for time.sleep: silence on the line, as the radio sees it."""
+    if _LIVE:
+        _LIVE[-1].idle(seconds)
+
 
 CLEAN = dict(bit7=0, other=0, drop=0)
 NOISY = dict(bit7=0.002,    # the fault seen on the real link
@@ -44,7 +56,10 @@ class FakeRadio:
         self.log = []            # (cmd, addr, length) of every frame handled
         self.violations = []
         self.corrupt_writes = 0  # corrupt one data byte of the next N writes
+        self.drop_acks = 0       # send no ACK for the next N writes
         self.resets = 0
+        self.sessions = 0        # sessions ended by silence
+        _LIVE[:] = [self]
 
     # --- serial.Serial interface --------------------------------------------
     def reset_input_buffer(self):
@@ -58,6 +73,12 @@ class FakeRadio:
         self.inbuf += bytes(d)
         self._process()
         return len(d)
+
+    def idle(self, seconds):
+        if seconds >= SESSION_IDLE and self.state != 'top':
+            self.state = 'top'      # back to the home screen, no reset
+            self.inbuf = b''
+            self.sessions += 1
 
     def close(self):
         if self.state != 'top':
@@ -78,6 +99,13 @@ class FakeRadio:
                 r[j] = b ^ (1 << rng.randrange(7))
         self.out += bytes(r)
 
+    def _password_flags(self):
+        """Settings bytes 0x439 (write) and 0x43A (read), as the firmware."""
+        for a in range(CP_START, CP_END, PAGE):
+            if self.flash[a + PAGE - 1] == 0x04:
+                return bytes(self.flash[a + 0x439:a + 0x43B])
+        return b'\x00\x00'
+
     def _v(self, i):
         body = {10: struct.pack('<II', CP_START, CP_END),
                 15: struct.pack('<II', CT_START, CT_END),
@@ -95,7 +123,8 @@ class FakeRadio:
     def _frame(self, b):
         st = self.state
         if st == 'top':
-            for cmd, rep in ((b'PSEARCH', b'\x06' + self.model), (b'PASSSTA', b'P\x00\x00'),
+            for cmd, rep in ((b'PSEARCH', b'\x06' + self.model),
+                             (b'PASSSTA', b'P' + self._password_flags()),
                              (b'SYSINFO', b'\x06')):
                 if b.startswith(cmd):
                     self._reply(rep, False)
@@ -162,6 +191,9 @@ class FakeRadio:
             if p % PAGE == 0 and i:
                 mem[p:p + PAGE] = b'\xff' * PAGE   # crossed into the next sector
             mem[p] &= byte
+        if cmd == b'W' and self.drop_acks:
+            self.drop_acks -= 1     # written, but the ACK never arrives
+            return
         self._reply(b'\x06', False)
 
 

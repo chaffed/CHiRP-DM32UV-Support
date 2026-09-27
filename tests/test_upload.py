@@ -16,7 +16,7 @@ import fake_dm32uv as fake  # noqa: E402
 import baofeng_dm32uv as drv  # noqa: E402
 from chirp import chirp_common, errors, memmap  # noqa: E402
 
-time.sleep = lambda s: None
+time.sleep = fake.virtual_sleep
 PAGE = drv.PAGE
 
 
@@ -550,3 +550,137 @@ drv.LOG.removeHandler(handler)
 assert any('DM32.01.01.048' in w and 'not been tested' in w for w in warnings), warnings
 assert r._metadata['dm32uv_firmware'] == 'DM32.01.01.048'
 print('OK: DM-32UV detected; other radios refused before any transfer; new firmware warns')
+
+
+# 25. Deleting every channel on a page: the emptied page is still uploaded
+#     (it is all 0xFF in the image, but the radio has it).
+def small_radio(channels, zones, extra=None):
+    """Flash with the given channels and zones, pages placed in tag order."""
+    b = drv.DM32UV(memmap.MemoryMapBytes(b'\xff' * drv.DM32UV._memsize))
+    b._put(0x04, 0, b'\x00' * (PAGE - 1))
+    for n, f in channels:
+        b.set_memory(mem(n, 'Ch%d' % n, f))
+    hdr = b._memobj.zone_hdr
+    hdr.count, hdr.a_zone, hdr.a_pos, hdr.b_zone, hdr.b_pos = len(zones), 1, 1, 1, 1
+    for z, (name, members) in enumerate(zones, 1):
+        b._zone(z).name = name.ljust(16, '\x00')
+        b._set_zone_members(z, members)
+    if extra:
+        extra(b)
+    img = b.get_mmap().get_packed()
+    pages = {}
+    for i, t in enumerate(drv.IMAGE_TAGS):
+        data = img[i * PAGE:(i + 1) * PAGE]
+        if data[:-1] != b'\xff' * (PAGE - 1):
+            pages[t] = (0x20000 + i * PAGE, data)
+    return fake.make_flash(pages)
+
+
+flash25 = small_radio([(1, 146520000), (90, 145500000), (200, 147000000)],
+                      [('Z', [1, 90, 200])])
+r = download(flash25, 70)
+e = r.get_memory(90)
+e.empty = True
+r.set_memory(e)
+upload(r, flash25, 71)
+assert download(flash25, 72).get_memory(90).empty, 'emptied page not uploaded'
+print('OK: a channel page emptied by deleting its channels is uploaded')
+
+# 26. A lost W acknowledgement: the radio ends the session after 2 s of
+#     silence; the driver reconnects, checks the page and carries on.
+r = download(flash25, 73)
+edit(r, 1, name='After lost ACK')
+edit(r, 200, name='Second page')
+n, writes, radio = upload(r, flash25, 74, drop_acks=1)
+assert radio.sessions == 1, radio.sessions
+assert names(download(flash25, 75), (1, 200)) == ['After lost ACK', 'Second page']
+print('OK: lost write ACK: reconnected and finished the upload')
+
+# 27. Passwords: CHIRP can't enter one, so a write password stops an upload
+#     before any W, and a read password stops a download.
+SP25 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash25[a + PAGE - 1] == 0x04][0]
+flash25[SP25 + 0x439] = 0xA5                            # write password on
+r = download(flash25, 76)                               # reading is allowed
+edit(r, 1, name='Not written')
+radio = fake.FakeRadio(flash25, fake.NOISY, seed=77)
+r.pipe = radio
+try:
+    drv.do_upload(r)
+    raise AssertionError('uploaded despite a write password')
+except errors.RadioError as e:
+    assert 'write password' in str(e), e
+assert not [x for x in radio.log if x[0] == 'W'], 'wrote despite a write password'
+flash25[SP25 + 0x439], flash25[SP25 + 0x43A] = 0x00, 0xA5    # read password on
+try:
+    download(flash25, 78)
+    raise AssertionError('downloaded despite a read password')
+except errors.RadioError as e:
+    assert 'read password' in str(e), e
+flash25[SP25 + 0x43A] = 0x00
+print('OK: write password refuses upload, read password refuses download')
+
+# 28. The radio's current zone and position follow a zone reorder done in
+#     CHIRP, even though the radio's live values are used.
+flash28 = small_radio([(n, 146000000 + n * 25000) for n in range(1, 10)],
+                      [('One', [1, 2, 3]), ('Two', [4, 5]), ('Three', [6, 7, 8, 9])])
+ZP28 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash28[a + PAGE - 1] == 0x5C][0]
+flash28[ZP28 + 5], flash28[ZP28 + 1] = 3, 2             # line A: zone Three, 2nd channel (7)
+flash28[ZP28 + 7], flash28[ZP28 + 3] = 2, 2             # line B: zone Two, channel 5
+r = download(flash28, 80)
+settings = r.get_settings()
+st = settings_dict(settings)
+st['zone_order'].value = '3, 1'
+st['zone_2_members'].value = ''                         # zone Two deleted
+st['zone_3_members'].value = '9, 7, 6'                  # 8 dropped, order changed
+r.set_settings(settings)
+upload(r, flash28, 81)
+assert download(flash28, 82)._zone_list() == [('Three', [9, 7, 6]), ('One', [1, 2, 3])]
+assert (flash28[ZP28 + 5], flash28[ZP28 + 1]) == (1, 2), 'line A did not follow channel 7'
+assert (flash28[ZP28 + 7], flash28[ZP28 + 3]) == (1, 1), 'line B not reset after deletion'
+print('OK: radio display follows zones reordered and deleted in CHIRP')
+
+
+# 29. Names CHIRP can't show (vendor CPS names in GBK), clamped values and
+#     250 zones: everything loads, and nothing changes unless edited.
+def odd_names(b):
+    b._set_contacts({1: ('X', 91, 1), 2: ('Plain', 92, 1)})
+    tag, off = b._contact_loc(1)
+    b._put(tag, off + 2, '中文'.encode('gbk'))
+    b._set_radio_ids([(16777215, 'Odd')])
+    b._memobj.zone_hdr.count = 250
+    for z in range(3, 251):
+        b._zone(z).name = ('Z%d' % z).ljust(16, '\x00')
+        b._set_zone_members(z, [1])
+    b._zone(2).name.set_raw('区'.encode('gbk').ljust(16, b'\x00'))
+
+
+flash29 = small_radio([(1, 146520000)], [('A', [1]), ('B', [1])], odd_names)
+r = download(flash29, 83)
+before = r.get_mmap().get_packed()
+settings = r.get_settings()
+st = settings_dict(settings)
+assert all(v.value.initialized for v in st.values()), [
+    k for k, v in st.items() if not v.value.initialized]
+assert str(st['con_1_name'].value) == '????' and str(st['zone_2_name'].value) == '??'
+r.set_settings(settings)
+assert r.get_mmap().get_packed() == before, 'unchanged settings changed the image'
+st['con_1_id'].value = 3100                             # edit the odd contact's ID
+st['zone_250_name'].value = 'Last'                      # edit with 250 zones
+r.set_settings(settings)
+assert r._contacts()[1] == ('中文'.encode('gbk').decode('latin-1'), 3100, 1)
+assert r._zone_list()[249][0] == 'Last' and r._radio_ids() == [(16777215, 'Odd')]
+print('OK: odd names, clamped IDs and 250 zones load; kept unless edited')
+
+# 30. Speed: 4000 channels and 800 contacts open in a few seconds.
+big = drv.DM32UV(memmap.MemoryMapBytes(b'\xff' * drv.DM32UV._memsize))
+for n in range(1, 4001):
+    big.set_memory(mem(n, 'C%d' % n, 440000000 + n * 12500, 'DMR' if n % 2 else 'FM'))
+big._set_contacts({k: ('TG %d' % k, 1000 + k, 1) for k in range(1, 801)})
+t0 = time.time()
+for n in range(1, 4001):
+    big.get_memory(n)
+elapsed = time.time() - t0
+assert elapsed < 10, '%.1f s to read 4000 channels' % elapsed
+print('OK: 4000 channels with 800 contacts read in %.1f s' % elapsed)

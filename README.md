@@ -44,9 +44,13 @@ message before transferring anything.
 - **Your DMR IDs, contacts (talkgroups) and RX group lists** are on CHIRP's **Settings**
   tab, under "DMR lists". **Scan lists** are there too. Leave a name empty to delete an
   entry; empty rows at the end are for adding new ones.
-- **What upload changes:** only the channels, zones, radio IDs, contacts and RX group lists
-  that differ from the radio. Every page it writes is read back to check it. Radio-wide settings
-  and encryption keys aren't changed.
+- **What upload changes:** only the channels, zones, DMR lists, scan lists and radio settings
+  that differ from the radio. Every page it writes is read back to check it. Passwords,
+  encryption keys and the factory calibration aren't changed.
+- **Passwords:** CHIRP can't enter a programming password, so the driver refuses a radio with
+  a read or write password. Remove it with the vendor software first.
+- **Your image files hold personal data** (radio ID, contacts, and any passwords in clear
+  text). Don't attach an image from your own radio to a public bug report.
 - **Cable:** the usual cable has a CH340 chip. On Linux it appears as `/dev/ttyUSB0`; add
   yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log out and
   back in). On macOS, Apple's built-in driver may not work; WCH's CH34x driver may help.
