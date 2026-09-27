@@ -79,8 +79,11 @@ as `Fixes #NNNN`.
    and only the zone page changed. Upload from the GUI therefore works too.
 3. Settings page (tag 0x04) from the CPS accessors (`re/BufRefs.java`,
    `re/DecompRefs.java`), then contacts/RX groups/zones.
-4. Upstream: a sanitised test image in `tests/images/`, a chirpmyradio.com
-   issue, a PR as `dm32uv: Add Baofeng DM-32UV driver`.
+4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
+   synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
+   pass). Texts in `docs/upstream/`. Waiting for the user: open the chirpmyradio.com issue,
+   then replace `#NNNN` in the commit and PR text, fork kk7ds/chirp, push, open the PR.
+   Publish as "chaffed" only (see memory), never a real name.
 
 ## Firmware notes
 
