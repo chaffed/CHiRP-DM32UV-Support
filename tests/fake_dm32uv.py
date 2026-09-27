@@ -29,8 +29,10 @@ NOISY = dict(bit7=0.002,    # the fault seen on the real link
 class FakeRadio:
     """Stands in for serial.Serial."""
 
-    def __init__(self, flash, noise=CLEAN, seed=1):
+    def __init__(self, flash, noise=CLEAN, seed=1, model=b'DP570UV',
+                 firmware=b'DM32.01.01.047'):
         self.flash = flash
+        self.model, self.firmware = model, firmware
         self.smem = bytearray(b'\xff' * 0x10000)   # the G/S memory
         self.noise = noise
         self.rng = random.Random(seed)
@@ -79,7 +81,7 @@ class FakeRadio:
     def _v(self, i):
         body = {10: struct.pack('<II', CP_START, CP_END),
                 15: struct.pack('<II', CT_START, CT_END),
-                1: b'DM32.01.01.047'}.get(i, b'\x01\x02')
+                1: self.firmware}.get(i, b'\x01\x02')
         return b'V' + bytes([i, len(body)]) + body
 
     # --- frame parser -----------------------------------------------------
@@ -93,7 +95,7 @@ class FakeRadio:
     def _frame(self, b):
         st = self.state
         if st == 'top':
-            for cmd, rep in ((b'PSEARCH', b'\x06DP570UV'), (b'PASSSTA', b'P\x00\x00'),
+            for cmd, rep in ((b'PSEARCH', b'\x06' + self.model), (b'PASSSTA', b'P\x00\x00'),
                              (b'SYSINFO', b'\x06')):
                 if b.startswith(cmd):
                     self._reply(rep, False)

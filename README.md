@@ -29,7 +29,8 @@ programming cable that came with the radio.
 6. Edit, then **Radio → Upload To Radio**.
 
 The radio goes back to normal by itself a few seconds after a download or upload; there is no
-need to switch it off and on.
+need to switch it off and on. If a different radio is connected, the driver stops with a
+message before transferring anything.
 
 ### Good to know
 
@@ -49,8 +50,8 @@ need to switch it off and on.
 - **Cable:** the usual cable has a CH340 chip. On Linux it appears as `/dev/ttyUSB0`; add
   yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log out and
   back in). On macOS, Apple's built-in driver may not work; WCH's CH34x driver may help.
-- **Other firmware versions** haven't been tested. If yours isn't DM32.01.01.047, save a
-  backup first, and please report how it went in
+- **Other firmware versions** haven't been tested; the driver logs a warning if yours isn't
+  DM32.01.01.047. Save a backup first, and please report how it went in
   [issue #11840](https://chirpmyradio.com/issues/11840).
 
 **Not supported yet:** APRS settings, DTMF/two-tone/five-tone signalling setup, passwords,

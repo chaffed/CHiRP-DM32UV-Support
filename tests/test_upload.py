@@ -517,3 +517,36 @@ assert (got['set_set_work_key_p1_short'], got['set_set_display_a_zone_color'],
 assert flash[SP + 0x91] == 41 and flash[SP + 0x3A] == 5 and flash[SP + 0x41] == 13
 assert flash[SP + 0x62] == 3 and flash[SP + 0x63] == 5, 'stored as list position + 1'
 print('OK: keys, colours, GPS, DMR timing and menu items uploaded and read back')
+
+
+# 24. Identification: detect_from_serial accepts a DM-32UV and refuses other
+#     radios (also over the noisy link); an untested firmware only warns.
+import logging  # noqa: E402
+for seed in range(60, 66):
+    assert drv.DM32UV.detect_from_serial(fake.FakeRadio(flash, fake.NOISY, seed=seed)) \
+        is drv.DM32UV
+for probe in ('detect', 'download'):
+    other = fake.FakeRadio(flash, fake.NOISY, seed=66, model=b'UV17PRO')
+    try:
+        if probe == 'detect':
+            drv.DM32UV.detect_from_serial(other)
+        else:
+            r = drv.DM32UV(other)
+            r.status_fn = lambda s: None
+            r.sync_in()
+        raise AssertionError('other radio accepted by %s' % probe)
+    except errors.RadioError as e:
+        assert 'UV17PRO' in str(e) and 'not as a Baofeng DM-32UV' in str(e), e
+    assert not [x for x in other.log if x[0] in ('R', 'W')], 'talked on after a wrong model'
+warnings = []
+handler = logging.Handler()
+handler.emit = lambda rec: warnings.append(rec.getMessage())
+drv.LOG.addHandler(handler)
+newer = fake.FakeRadio(flash, fake.NOISY, seed=67, firmware=b'DM32.01.01.048')
+r = drv.DM32UV(newer)
+r.status_fn = lambda s: None
+r.sync_in()
+drv.LOG.removeHandler(handler)
+assert any('DM32.01.01.048' in w and 'not been tested' in w for w in warnings), warnings
+assert r._metadata['dm32uv_firmware'] == 'DM32.01.01.048'
+print('OK: DM-32UV detected; other radios refused before any transfer; new firmware warns')
