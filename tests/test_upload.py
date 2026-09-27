@@ -515,7 +515,7 @@ got = {k: v.value.get_value() for k, v in settings_dict(download(flash, 56).get_
 assert (got['set_set_work_key_p1_short'], got['set_set_display_a_zone_color'],
         got['set_set_gps_time_zone'], got['set_set_dmr_active_wait'],
         got['set_set_dmr_active_retries']) == ('Flashlight', 'Green', 'UTC +1:00', '360 ms', '5')
-assert flash[SP + 0x91] == 41 and flash[SP + 0x3A] == 5 and flash[SP + 0x41] == 13
+assert flash[SP + 0x8D] == 41 and flash[SP + 0x3A] == 5 and flash[SP + 0x41] == 13
 assert flash[SP + 0x62] == 3 and flash[SP + 0x63] == 5, 'stored as list position + 1'
 print('OK: keys, colours, GPS, DMR timing and menu items uploaded and read back')
 
@@ -875,3 +875,58 @@ for bad in ('100', '4000', 'x'):
     except (errors.InvalidValueError, chirp_settings.InvalidValueError):
         pass
 print('OK: two-tone system, decode and encode list uploaded in the CPS format')
+
+
+# 34. Five-tone (tag 0x03 from 0x730): system, BOT/EOT, message codes and
+#     special calls, in the CPS format (hex digits, 0xFF-terminated).
+def five_tone_page():
+    page = signal_page()
+    page[0x730:0x740] = bytes.fromhex('0102030405 00 f1 ffffff 0f 0a 0a 00 01 ff'.replace(' ', ''))
+    page[0x750:0x760] = bytes.fromhex('00f101020304050607ffffffffffffff')
+    page[0x760:0x770] = bytes.fromhex('03f202020304050607ffffffffffffff')
+    page[0x7D0:0x7E2] = bytes.fromhex('0102030405' + 'ff' * 11 + '0007')
+    page[0x7F0:0x802] = bytes.fromhex('0607080900' + 'ff' * 11 + '0007')
+    page[0x820:0x829] = bytes.fromhex('000405060708000007')
+    page[0x850:0x859] = bytes.fromhex('010e0fffffff000007')
+    page[0x860:0x870] = bytes.fromhex('01020304050607ffffffffffffffffff')
+    page[0x870:0x87E] = b'Disable\x00sable\x00'
+    return page
+
+
+flash34 = small_radio([(1, 146520000)], [('A', [1])],
+                      lambda b: b._put(0x03, 0, bytes(five_tone_page())))
+SG34 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash34[a + PAGE - 1] == 0x03][0]
+r = download(flash34, 98)
+settings = r.get_settings()
+st = settings_dict(settings)
+got = {k: str(v.value) for k, v in st.items()}
+assert (got['set_fivetone_self_id'], got['set_fivetone_decode_resp'],
+        got['set_fivetone_pre_carrier'], got['set_fivetone_auto_reset'],
+        got['set_fivetone_send_delay'], got['set_fivetone_bot_id'],
+        got['set_fivetone_eot_long'], got['set_fivetone_msg2_code'],
+        got['set_fivetone_msg2_func'], got['fts_1_type'], got['fts_1_code'],
+        got['fts_2_type'], got['fts_2_data'], got['fts_2_name']) == (
+    '12345', 'Alert Tone', '300 ms', '10 s', '100 ms', '12345', '70 ms', '2234567',
+    'Stun', 'ANI', '45678', 'Data Transmission', '1234567', 'Disable'), got
+r.set_settings(settings)
+assert r.get_mmap().get(drv.IMAGE_TAGS.index(0x03) * PAGE, PAGE - 1) == \
+    bytes(five_tone_page()), 'unchanged five-tone settings changed the page'
+for key, value in (('set_fivetone_self_id', 'a1f'), ('set_fivetone_decode_std', 'CCIR1'),
+                   ('set_fivetone_ptt_id_pause', '7 s'), ('set_fivetone_eot_id', '9'),
+                   ('set_fivetone_msg3_code', 'FF00'), ('set_fivetone_msg3_func', 'Kill'),
+                   ('set_fivetone_msg3_resp', 'Alert Tone And ACK'),
+                   ('fts_3_type', 'ANI'), ('fts_3_code', '12abc'), ('fts_3_name', 'Base'),
+                   ('fts_3_tone_long', '100 ms'), ('fts_1_type', 'Off')):
+    st[key].value = value
+r.set_settings(settings)
+upload(r, flash34, 99)
+page = flash34[SG34:SG34 + PAGE]
+assert page[0x730:0x736] == bytes([10, 1, 15, 0xFF, 0xFF, 3]), page[0x730:0x736].hex()
+assert page[0x73D] == 7 and page[0x7F0:0x7F2] == bytes([9, 0xFF])
+assert page[0x770:0x776] == bytes([4, 0xF2, 15, 15, 0, 0]) and page[0x776] == 0xFF
+assert page[0x820] == 0xFF and page[0x821:0x826] == bytes([4, 5, 6, 7, 8])
+assert page[0x880] == 0 and page[0x881:0x886] == bytes([1, 2, 10, 11, 12])
+assert page[0x888] == 10 and page[0x8A0:0x8A6] == b'Base\x00\xff'
+assert download(flash34, 100)._ft_special()[2]['name'] == 'Base'
+print('OK: five-tone system, BOT/EOT, message codes and special calls uploaded')

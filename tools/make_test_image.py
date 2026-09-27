@@ -4,7 +4,7 @@
 Everything in it is made up here; no data from a real radio. Channels
 cover analog and DMR, all tone modes, duplex variants and power levels;
 there are two zones, two scan lists, radio IDs, contacts, RX group lists
-and a key.
+a key, and DTMF, two-tone and five-tone settings.
 
     python3 make_test_image.py tests/images/Baofeng_DM-32UV.img
 """
@@ -69,6 +69,38 @@ ZONES = [('Analog', [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14]),
          ('Digital', [10, 11, 12])]
 
 
+def dtmf_page():
+    """Made-up DTMF settings (tag 0x06): codes, options, two contacts."""
+    page = bytearray(b'\xff' * (PAGE - 1))
+    page[0x000:0x007] = bytes([1, 2, 3, 14, 4, 5, 6])            # 123*456
+    page[0x100:0x110] = bytes([15, 0, 0, 0, 10, 1, 1, 2, 3, 10, 14, 2,
+                               0, 0, 0, 0])
+    page[0x110:0x114] = bytes([1, 0, 1, 0xFF])                   # PTT ID up
+    page[0x1FF] = 2
+    for k, (name, digits) in enumerate(((b'Base', [1, 0, 0]),
+                                        (b'Mobile', [2, 0, 0])), 1):
+        page[0x1E0 + 0x20 * k:0x1F0 + 0x20 * k] = name.ljust(16, b'\x00')
+        page[0x1F0 + 0x20 * k:0x200 + 0x20 * k] = bytes(digits).ljust(
+            5, b'\xff') + bytes(11)
+    return bytes(page)
+
+
+def signal_page():
+    """Made-up two-tone and five-tone settings (tag 0x03)."""
+    page = bytearray(b'\xff' * (PAGE - 1))
+    page[0x001] = 1
+    page[0x030:0x041] = bytes([5, 5, 5, 5, 0, 0xFF, 0]) + bytes.fromhex(
+        '1027983a204ea861ff') + bytes([10])     # 1000/1500/2000/2500 Hz
+    page[0x041:0x045] = bytes.fromhex('0103ffff')
+    page[0x220:0x248] = ('Test').encode('utf-16-le').ljust(0x20, b'\x00') + \
+        bytes.fromhex('feff1027983affff')
+    page[0x730:0x740] = bytes.fromhex('0506070809' '00f1ffffff0f0a0a0001ff')
+    page[0x750:0x760] = bytes.fromhex('00f10a0b0cffffffffffffffffffffff')
+    page[0x820:0x829] = bytes.fromhex('000102030405000007')
+    page[0x840:0x850] = b'Test call\x00'.ljust(16, b'\xff')
+    return bytes(page)
+
+
 def build():
     radio = drv.DM32UV(memmap.MemoryMapBytes(b'\xff' * drv.DM32UV._memsize))
     mmap = radio.get_mmap()
@@ -81,6 +113,8 @@ def build():
     radio._put(0x04, 0, b'\x00' * (PAGE - 1))
     for sname, field, value in SETTINGS:
         setattr(getattr(radio._memobj, sname), field, value)
+    radio._put(0x03, 0, signal_page())
+    radio._put(0x06, 0, dtmf_page())
     radio._set_radio_ids(RADIO_IDS)
     radio._set_contacts(CONTACTS)
     radio._set_rx_groups(RX_GROUPS)
