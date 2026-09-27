@@ -108,7 +108,7 @@ READ_COPIES, READ_TRIES = 3, 10
 # references. One whole aligned page per W frame: the firmware erases the
 # sector on an aligned W and also erases the next sector if a W crosses
 # into it. Tags 0x02 and 0x69 look like calibration: never written.
-UPLOAD_TAGS = ([0x04, RADIOID_TAG] +
+UPLOAD_TAGS = ([0x04, 0x06, RADIOID_TAG] +
                list(range(CONTACT_REC_TAG0, CONTACT_REC_TAG0 + 5)) +
                [CONTACT_INDEX_TAG, RXG_TAG, SCAN_TAG] +
                list(range(0x12, 0x42)) + list(TXC_TAGS) +
@@ -135,7 +135,7 @@ struct chan {
   u8 txtone[2];
   u8 unknown25:2, compander:1, vox:1, unknown25b:4;
   u8 ptt_id_display:1, rx_squelch_mode:3, signaling:3, unknown26:1;
-  u8 unknown27;
+  u8 rx_signal:4, tx_signal:4;
   u8 unknown28;
   u8 step:4, ptt_id:2, unknown29:2;
   u8 unknown2a;
@@ -273,13 +273,56 @@ struct {
 """
 
 
+# DTMF (tag 0x06; CPS dialog 0x421bc0, accessors 0x47bb10-0x47c920). Codes
+# are one digit per byte (0-9, A-D = 10-13, * = 14, # = 15), ended by 0xFF.
+# 0xA20 on is BDC1200 (not handled; kept as it is).
+DTMF_TAG, DTMF_CODES, DTMF_CONTACTS = 0x06, 16, 64
+DTMF_CHARS = '0123456789ABCD*#'
+DTMF_FORMAT = """
+#seekto 0x%%(b)x;
+struct {
+%s
+  u8 pre_carrier;
+  u8 first_digit;
+  u8 duration;
+  u8 interval;
+  u8 auto_reset;
+  u8 unknown105:7, side_tone:1;
+  u8 self_id[3];
+  u8 group_code;
+  u8 interval_sign;
+  u8 auto_answer;
+  u8 ptt_id_pause;
+  u8 unknown10d;
+  u8 min_duration;
+  u8 unknown10f;
+  u8 ptt_id_up[16];
+  u8 ptt_id_down[16];
+  u8 stun_code[16];
+  u8 kill_code[16];
+} dtmf;
+#seekto 0x%%(b1ff)x;
+u8 dtmf_contact_count;
+struct {
+  char name[16];
+  u8 number[5];
+  u8 unknown[11];
+} dtmf_contacts[%d];
+""" % ('\n'.join('  u8 code%d[16];' % i for i in range(1, DTMF_CODES + 1)),
+       DTMF_CONTACTS)
+# The page each settings struct lives on.
+STRUCT_TAGS = {'dtmf': DTMF_TAG}
+
+
 def _mem_format():
     """Channel pages as the CPS lays them out (see channel_offset)."""
     b = IMAGE_TAGS.index(0x04) * PAGE      # settings come first: lowest slot
+    d = IMAGE_TAGS.index(DTMF_TAG) * PAGE
     fmt = [CHAN_FORMAT,
            SETTINGS_FORMAT % dict(b=b, b30=b + 0x30, b40=b + 0x40,
                                   b60=b + 0x60, b80=b + 0x80, ba0=b + 0xA0,
                                   b301=b + 0x301, b500=b + 0x500),
+           DTMF_FORMAT % dict(b=d, b1ff=d + 0x1FF),
            '#seekto 0x%x;\nul16 ch_count;' % CH_BASE,
            '#seekto 0x%x;\nstruct chan page0[84];' % (CH_BASE + 0x10)]
     for p in range(1, 48):
@@ -489,6 +532,64 @@ RADIO_SETTINGS.append(('APRS', [
       'channel', i) for i in range(8)]))
 
 
+_MS = '%d ms'
+RADIO_SETTINGS.append(('DTMF', [
+    ('dtmf', 'self_id', 'Self ID code', 'digits', 3),
+    ('dtmf', 'ptt_id_up', 'PTT ID up code (BOT)', 'dtmf', 16),
+    ('dtmf', 'ptt_id_down', 'PTT ID down code (EOT)', 'dtmf', 16),
+    ('dtmf', 'stun_code', 'Stun code', 'dtmf', 16),
+    ('dtmf', 'kill_code', 'Kill code', 'dtmf', 16),
+    ('dtmf', 'group_code', 'Group code', 'list', (         # [DtmfGroupCode]
+        ['Off', 'A', 'B', 'C', 'D', '*', '#'], [0xFF] + list(range(10, 16)))),
+    ('dtmf', 'interval_sign', 'DTMF interval sign', 'list', (
+        ['A', 'B', 'C', 'D', '*', '#'], 10)),             # [DtmfIntervalSign]
+    ('dtmf', 'auto_answer', 'Auto answer', 'list', (       # [DtmfAutoAck]
+        ['Off', 'Alert Tone', 'Alert Tone And Ack'], 0)),
+    ('dtmf', 'side_tone', 'Side tone', 'bool', None),
+    ('dtmf', 'pre_carrier', 'Pre-carrier time', 'list', (
+        [_MS % i for i in range(300, 5001, 50)], 15)),
+    ('dtmf', 'first_digit', 'First digit time', 'list', (
+        [_MS % i for i in range(100, 1001, 50)], 0)),
+    ('dtmf', 'duration', 'Send DTMF duration', 'list', (
+        [_MS % i for i in range(80, 2001, 10)], 0)),
+    ('dtmf', 'interval', 'Send DTMF interval', 'list', (
+        [_MS % i for i in range(80, 2001, 10)], 0)),
+    ('dtmf', 'min_duration', 'Dial code minimum duration', 'list', (
+        [_MS % i for i in range(25, 2501, 25)], 0)),
+    ('dtmf', 'auto_reset', 'Auto reset time', 'list', (
+        ['%d s' % i for i in range(1, 256)], 1)),
+    ('dtmf', 'ptt_id_pause', 'PTT ID pause time', 'list', (
+        ['Off'] + ['%d s' % i for i in range(5, 76)], [0] + list(range(5, 76)))),
+] + [('dtmf', 'code%d' % i, 'DTMF code %d' % i, 'dtmf', 16)
+     for i in range(1, DTMF_CODES + 1)]))
+
+
+def _list_index(stored, offset):
+    """List position of a stored value; offset is added to the position,
+    or is the list of stored values."""
+    if isinstance(offset, list):
+        return offset.index(stored) if stored in offset else -1
+    return stored - offset
+
+
+def _list_stored(index, offset):
+    return offset[index] if isinstance(offset, list) else index + offset
+
+
+def _dtmf_text(raw, chars=DTMF_CHARS):
+    """Code bytes (digit values, 0xFF-terminated) -> text."""
+    text = ''
+    for b in raw:
+        if b >= len(chars):
+            break
+        text += chars[b]
+    return text
+
+
+def _dtmf_bytes(text, length, chars=DTMF_CHARS):
+    return bytes(chars.index(c) for c in text.upper()).ljust(length, b'\xFF')
+
+
 def _format_coord(value, limit):
     """A coordinate as the CPS stores it (0x488750, 0x488950): 9 chars,
     e.g. "05.500000", "23.000000", "118.00000"; at most `limit`."""
@@ -570,6 +671,12 @@ LIST_EXTRAS = {
     'aprs_report': ('APRS report (DMR)', ['Off', 'Digital']),
     # one of the 8 report channels of the APRS settings
     'aprs_channel': ('APRS report channel', [str(i) for i in range(1, 9)]),
+    # which two-tone (1-8) or BDC1200 (1-4) entry, per signaling type
+    # (CPS 0x414470)
+    'rx_signal': ('RX signaling system', ['None'] + [
+        str(i) for i in range(1, 9)]),
+    'tx_signal': ('TX signaling system', ['None'] + [
+        str(i) for i in range(1, 9)]),
 }
 # [ChAnaTxAdmit] for analog channels, [ChDigTxAdmit] for digital ones
 TX_ADMIT = {False: ['Allow TX', 'Channel Idle', 'Match CTC', 'Non Match CTC'],
@@ -1564,9 +1671,72 @@ class DM32UV(chirp_common.CloneModeRadio):
                 RadioSettingValueString(0, 400, ', '.join(map(str, members)),
                                         autopad=False)))
         groups_out = [dmr, scan, zones]
-        if self._page(0x04)[1][:PAGE - 1] != b'\xFF' * (PAGE - 1):
-            groups_out.insert(0, self._radio_settings())
+        if self._has_page(DTMF_TAG):
+            groups_out.append(self._dtmf_contacts_group())
+        radio = self._radio_settings()
+        if len(radio):
+            groups_out.insert(0, radio)
         return RadioSettings(*groups_out)
+
+    def _has_page(self, tag):
+        return self._page(tag)[1][:PAGE - 1] != b'\xFF' * (PAGE - 1)
+
+    def _dtmf_contacts(self):
+        """[(name, number)] of DTMF (analog) contacts 1..count."""
+        count = int(self._memobj.dtmf_contact_count)
+        count = count if count <= DTMF_CONTACTS else 0
+        return [(self._text(c.name.get_raw()),
+                 _dtmf_text(c.number.get_raw(), '0123456789'))
+                for c in list(self._memobj.dtmf_contacts)[:count]]
+
+    def _dtmf_contacts_group(self):
+        group = RadioSettingGroup('dtmf_contacts', 'DTMF contacts')
+        contacts = self._dtmf_contacts()
+        for n in range(1, min(len(contacts) + 4, DTMF_CONTACTS) + 1):
+            name, number = contacts[n - 1] if n <= len(contacts) else ('', '')
+            group.append(RadioSetting(
+                'dtc_%d_name' % n, 'DTMF contact %d: name' % n,
+                RadioSettingValueString(0, 16, _shown(name), autopad=False)))
+            group.append(RadioSetting(
+                'dtc_%d_number' % n, 'DTMF contact %d: number (up to 5 '
+                'digits)' % n,
+                RadioSettingValueString(0, 5, number, autopad=False,
+                                        charset='0123456789')))
+        return group
+
+    def _set_dtmf_contacts(self, values):
+        old = self._dtmf_contacts()
+        new = list(old)
+        for n in range(1, DTMF_CONTACTS + 1):
+            if 'dtc_%d_name' % n not in values:
+                continue
+            old_name = old[n - 1][0] if n <= len(old) else ''
+            name = _edited(values['dtc_%d_name' % n], old_name)
+            number = str(values['dtc_%d_number' % n]).strip()
+            while len(new) < n:
+                new.append(('', ''))
+            new[n - 1] = (name, number)
+        while new and not new[-1][0]:
+            new.pop()
+        for n, (name, number) in enumerate(new, 1):
+            if not name:
+                raise errors.InvalidValueError(
+                    'DTMF contact %d: a name is needed (only the last '
+                    'contacts can be removed)' % n)
+        if new == old:
+            return
+        self._forget()
+        for n, (name, number) in enumerate(new, 1):
+            c = self._memobj.dtmf_contacts[n - 1]
+            if n > len(old) or old[n - 1][0] != name:
+                c.name.set_raw(_name_bytes(name, 16))
+            if n > len(old) or old[n - 1][1] != number:
+                c.number.set_raw(_dtmf_bytes(number, 5, '0123456789'))
+            if n > len(old) and c.unknown.get_raw() == b'\xFF' * 11:
+                c.unknown.set_raw(b'\x00' * 11)
+        for n in range(len(new) + 1, len(old) + 1):
+            self._memobj.dtmf_contacts[n - 1].set_raw(b'\xFF' * 0x20)
+        self._memobj.dtmf_contact_count = len(new)
 
     def _radio_settings(self):
         top = RadioSettingGroup('radio', 'Radio settings')
@@ -1574,6 +1744,8 @@ class DM32UV(chirp_common.CloneModeRadio):
             group = RadioSettingGroup('radio_%s' % title.lower().replace(
                 ' ', '_'), title)
             for sname, field, label, kind, extra in entries:
+                if not self._has_page(STRUCT_TAGS.get(sname, 0x04)):
+                    continue
                 obj = getattr(self._memobj, sname)
                 name = 'set_%s_%s' % (sname, field)
                 if kind == 'bool':
@@ -1599,13 +1771,23 @@ class DM32UV(chirp_common.CloneModeRadio):
                     name = 'set_%s_%s_%d' % (sname, field, extra + 1)
                     value = self._channel_choice(
                         int(getattr(obj, field)[extra]))
+                elif kind == 'dtmf':
+                    value = RadioSettingValueString(
+                        0, extra, _dtmf_text(getattr(obj, field).get_raw()),
+                        autopad=False, charset=DTMF_CHARS + 'abcd')
+                elif kind == 'digits':
+                    value = RadioSettingValueString(
+                        0, extra, _dtmf_text(getattr(obj, field).get_raw(),
+                                             '0123456789'),
+                        autopad=False, charset='0123456789')
                 else:
                     options, offset = extra
-                    index = int(getattr(obj, field)) - offset
+                    index = _list_index(int(getattr(obj, field)), offset)
                     value = RadioSettingValueList(options, current_index=(
                         index if 0 <= index < len(options) else 0))
                 group.append(RadioSetting(name, label, value))
-            top.append(group)
+            if len(group):
+                top.append(group)
         return top
 
     def _channel_choice(self, value):
@@ -1691,14 +1873,29 @@ class DM32UV(chirp_common.CloneModeRadio):
                     old = str(getattr(obj, field)).split('\x00')[0]
                     if text != old.split('\xFF')[0]:
                         setattr(obj, field, text[:extra].ljust(extra, '\x00'))
+                elif kind in ('dtmf', 'digits'):
+                    chars = DTMF_CHARS if kind == 'dtmf' else '0123456789'
+                    raw = getattr(obj, field)
+                    text = str(values[name]).strip().upper()
+                    if text != _dtmf_text(raw.get_raw(), chars):
+                        if kind == 'digits':
+                            # the CPS pads with leading zeros (0x47be70)
+                            raw.set_raw(bytes(chars.index(c) for c in
+                                              text.rjust(extra, '0')))
+                        else:
+                            raw.set_raw(_dtmf_bytes(text, extra))
                 else:
                     options, offset = extra
                     new = options.index(str(values[name]))
-                    shown = int(getattr(obj, field)) - offset
+                    shown = _list_index(int(getattr(obj, field)), offset)
                     if not 0 <= shown < len(options):
                         shown = 0           # displayed as the first option
                     if new != shown:        # don't rewrite what wasn't changed
-                        setattr(obj, field, new + offset)
+                        setattr(obj, field, _list_stored(new, offset))
+
+        self._forget()
+        if self._has_page(DTMF_TAG):
+            self._set_dtmf_contacts(values)
 
         # Radio IDs: keep the ones with an ID, in order; renumber channels.
         old = self._radio_ids()

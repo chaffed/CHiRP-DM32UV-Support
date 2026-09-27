@@ -736,3 +736,81 @@ for bad in ('91', '-1', 'north'):
     except errors.InvalidValueError:
         pass
 print('OK: APRS settings and report channel uploaded in the CPS format')
+
+
+# 32. DTMF (tag 0x06): system options, codes and DTMF contacts, in the
+#     CPS's storage format (one digit value per byte, 0xFF-terminated).
+def dtmf_radio(b):
+    page = bytearray(b'\xff' * (PAGE - 1))
+    page[0x000:0x007] = bytes([4, 5, 6, 14, 1, 2, 3])            # 456*123
+    page[0x100:0x110] = bytes([0x0F, 0, 0, 0, 10, 1, 1, 2, 3, 10, 14, 2, 0, 0, 0, 0])
+    page[0x110:0x117] = bytes([4, 5, 6, 13, 1, 2, 3])            # 456D123
+    page[0x1FF] = 2
+    for k, (name, digits) in enumerate(((b'AContact 1', [9, 6, 0, 0, 0]),
+                                        (b'AContacts 2', [9, 6, 0, 0, 1])), 1):
+        page[0x1E0 + 0x20 * k:0x1F0 + 0x20 * k] = name.ljust(16, b'\x00')
+        page[0x1F0 + 0x20 * k:0x200 + 0x20 * k] = bytes(digits + [0] * 11)
+    page[0xA20:0xA30] = bytes(range(16))                          # BDC1200: kept
+    b._put(0x06, 0, bytes(page))
+    b.set_memory(mem(2, 'Two tone', 146600000))
+
+
+flash32 = small_radio([(1, 146520000)], [('A', [1])], dtmf_radio)
+DP32 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash32[a + PAGE - 1] == 0x06][0]
+r = download(flash32, 93)
+settings = r.get_settings()
+st = settings_dict(settings)
+got = {k: str(v.value) for k, v in st.items()}
+assert (got['set_dtmf_code1'], got['set_dtmf_ptt_id_up'], got['set_dtmf_self_id'],
+        got['set_dtmf_group_code'], got['set_dtmf_interval_sign'],
+        got['set_dtmf_auto_answer'], got['set_dtmf_pre_carrier'],
+        got['set_dtmf_auto_reset'], got['set_dtmf_side_tone']) == (
+    '456*123', '456D123', '123', 'A', '*', 'Alert Tone And Ack', '300 ms', '10 s',
+    'True'), got
+assert (got['dtc_1_name'], got['dtc_1_number'], got['dtc_2_number']) == (
+    'AContact 1', '96000', '96001')
+r.set_settings(settings)
+assert flash32[DP32:DP32 + PAGE - 1] == r.get_mmap().get(
+    drv.IMAGE_TAGS.index(0x06) * PAGE, PAGE - 1), 'unchanged DTMF settings changed the page'
+for key, value in (('set_dtmf_code2', '#1a'), ('set_dtmf_kill_code', 'C999'),
+                   ('set_dtmf_self_id', '7'), ('set_dtmf_group_code', 'Off'),
+                   ('set_dtmf_pre_carrier', '400 ms'), ('set_dtmf_ptt_id_pause', '6 s'),
+                   ('dtc_2_name', 'Base'), ('dtc_3_name', 'Mobile'),
+                   ('dtc_3_number', '12345')):
+    st[key].value = value
+r.set_settings(settings)
+m = r.get_memory(2)
+for s_ in m.extra:
+    if s_.get_name() == 'signaling':
+        s_.value = 'Two Tone'
+    elif s_.get_name() == 'rx_signal':
+        s_.value = '3'
+    elif s_.get_name() == 'tx_signal':
+        s_.value = '8'
+r.set_memory(m)
+n, writes, _ = upload(r, flash32, 94)
+page = flash32[DP32:DP32 + PAGE]
+assert page[0x010:0x014] == bytes([15, 1, 10, 0xFF]), page[0x10:0x14].hex()
+assert page[0x140:0x145] == bytes([12, 9, 9, 9, 0xFF])
+assert page[0x106:0x109] == bytes([0, 0, 7]), 'self ID not zero-padded'
+assert page[0x109] == 0xFF and page[0x100] == 17 and page[0x10C] == 6
+assert page[0x1FF] == 3 and page[0x220:0x225] == b'Base\x00'
+assert page[0x240:0x246] == b'Mobile' and page[0x250:0x256] == bytes([1, 2, 3, 4, 5, 0])
+assert page[0xA20:0xA30] == bytes(range(16)), 'BDC1200 bytes changed'
+r2 = download(flash32, 95)
+_m = r2._chan(2)
+assert (int(_m.signaling), int(_m.rx_signal), int(_m.tx_signal)) == (2, 3, 8)
+settings = r2.get_settings()
+st = settings_dict(settings)
+st['dtc_3_name'].value = ''                                  # remove the last one
+r2.set_settings(settings)
+assert r2._dtmf_contacts() == [('AContact 1', '96000'), ('Base', '96001')]
+settings = r2.get_settings()
+settings_dict(settings)['dtc_1_name'].value = ''             # not the last: refused
+try:
+    r2.set_settings(settings)
+    raise AssertionError('removed a DTMF contact in the middle')
+except errors.InvalidValueError:
+    pass
+print('OK: DTMF options, codes, contacts and channel signaling systems uploaded')
