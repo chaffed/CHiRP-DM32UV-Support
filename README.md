@@ -65,7 +65,7 @@ radio back (only the expected bytes changed) and on the radio's own display.
 | **DMR per channel** | Color code, time slot, TX contact, radio ID, RX group list, encryption on/off and key |
 | **Channel options** | TX admit, RX squelch mode, signaling type, PTT ID, VOX, compander, APRS, emergency, TDMA direct and more, as extra fields |
 | **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
-| **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (radio check pending) |
+| **Scan lists** (Settings tab) | Name, channels, CTC scan mode, scan TX mode; scan list per channel (simulator-tested; not yet checked on a radio) |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
 | **Transfer** | Download; upload of only what changed, each page read back and checked |
 
