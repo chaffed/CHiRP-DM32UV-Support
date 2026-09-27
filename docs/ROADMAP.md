@@ -18,7 +18,7 @@ for the work; **risk** is the chance of harming a radio's data if the feature is
 | 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | **done** (simulator-tested; not checked on a radio) |
 | 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low | |
 | 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | **done** (simulator-tested; not checked on a radio) |
-| 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium | **mostly done** (keys, colours, GPS, recording, DMR options, menu items; not APRS, passwords, DTMF/2-tone/5-tone; simulator-tested) |
+| 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium | **mostly done** (keys, colours, GPS, recording, DMR options, menu items; simulator-tested). APRS, passwords, DTMF/2-tone/5-tone: [plan](PLAN.md) |
 | 11 | [Automatic radio detection](#11-automatic-radio-detection) | Low | S | Low | **done** (model check and firmware warning; checked on the radio) |
 
 \* needs a tester whose radio runs firmware .048.

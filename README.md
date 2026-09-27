@@ -123,6 +123,7 @@ All details are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 |------|----------|
 | [`driver/baofeng_dm32uv.py`](driver/baofeng_dm32uv.py) | The CHIRP driver (the file you load) |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Missing features, ordered by value to users |
+| [`docs/PLAN.md`](docs/PLAN.md) | Review fixes and the plan for passwords, APRS and DTMF/two-tone/five-tone |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | Protocol, page layout, channel record, zones, DMR lists, firmware notes, test log |
 | [`tools/dm32uv_read.py`](tools/dm32uv_read.py) | Read-only dump tool; logs every byte. `--all-pages` makes a full backup |
 | [`tools/dm32uv_write.py`](tools/dm32uv_write.py) | Careful single-page writes (no-op test, restore one page from a backup); dry run unless `--yes` |

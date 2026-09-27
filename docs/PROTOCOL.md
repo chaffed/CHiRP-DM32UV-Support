@@ -21,9 +21,9 @@ It passes mode 0 for read and 1 for write, and runs `FUN_0044a210` in a worker t
 | # | Send | Expect | Notes |
 |---|------|--------|-------|
 | 1 | `PSEARCH` | 8 bytes, `[0] == 0x06` | Retried up to 5 times. Bytes 1–7 are a model ID: `DP570UV` on a real DM-32UV. |
-| 2 | `PASSSTA` | 3 bytes: `'P' rd wr` | `rd == 0xA5` means a read password is set; `wr == 0xA5` means a write password is set. |
+| 2 | `PASSSTA` | 3 bytes: `'P' wr rd` | The firmware replies with settings bytes 0x439 (`wr`) and 0x43A (`rd`). `0xA5` means that password is set, `0x00` that it isn't. The CPS checks `wr` when writing and `rd` when reading. |
 | 2a | `PASWORD` | `0x06` | Only when the flag for the current direction is `0xA5`. |
-| 2b | `'P' ('R'\|'W') pw[8]` (10 bytes) | 1 byte | Password is ASCII, padded with 0xFF, NUL-terminated if shorter than 8. |
+| 2b | `'P' ('R'\|'W') pw[8]` (10 bytes) | 1 byte | Password is ASCII, padded with 0xFF, NUL-terminated if shorter than 8. The firmware compares it with settings 0x443 (`R`) or 0x43B (`W`) and replies `0x06` if it matches, `0x15` if not. It stores no result: `R`/`W` work without it, so only the CPS enforces passwords. |
 | 3 | `SYSINFO` | 1 byte (`0x06`) | |
 | 4 | `V 00 00 40 0D` | `'V' x n` then `n` bytes | Radio info blob |
 | 5 | `V 00 00 00 i` for i = 1..16, except 12 | `'V' x n` then `n` bytes | See the V table below |
@@ -338,8 +338,8 @@ plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
 | 0xA4 | 7–4 power save (None, 1:1, 1:2, 1:4), 2 weather alarm, 1 language (Chinese/English), 0 disable LEDs | |
 | 0xA5 | 7–4 TBST (1000/1450/1750/2100 Hz), 1–0 tail noise reduction (None, 120, 180, 55 Hz) | |
 | 0xA6, 0xA7 | analog mic level (1–5); digital mic (Enhance MIC 1–3, not decoded) | |
-| 0x300–0x332 | APRS | not in the driver yet |
-| 0x430–0x443 | power-on / read / write passwords | not in the driver (never touch) |
+| 0x301–0x333 | APRS (dialog `0x439c00`): latitude and longitude as ASCII at 0x306 and 0x310; see [PLAN.md](PLAN.md#part-b-aprs) | not in the driver yet |
+| 0x430–0x44A | passwords: 0x430 power-on flag, 0x431 power-on password (8), 0x439 write flag, 0x43A read flag, 0x43B write password (8), 0x443 read password (8); flags 0xA5 = set | not in the driver (kept as read) |
 | 0x500–0x507 | menu items the radio shows (45 bits, labels from the CPS; 0x503 bits 0–1 unknown) | |
 
 *Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
