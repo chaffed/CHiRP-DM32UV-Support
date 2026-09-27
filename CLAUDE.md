@@ -81,8 +81,9 @@ as `Fixes #NNNN`.
    `re/DecompRefs.java`), then contacts/RX groups/zones.
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
-   pass). Texts in `docs/upstream/`. Waiting for the user: open the chirpmyradio.com issue,
-   then replace `#NNNN` in the commit and PR text, fork kk7ds/chirp, push, open the PR.
+   pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").
+   Texts in `docs/upstream/`: the PR description, and a comment for #11840 to post after
+   the PR is open. Waiting for the user: fork kk7ds/chirp, push the branch, open the PR.
    Publish as "chaffed" only (see memory), never a real name.
 
 ## Firmware notes

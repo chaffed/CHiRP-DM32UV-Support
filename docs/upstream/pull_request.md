@@ -2,7 +2,7 @@
 
 ---
 
-Adds a driver for the Baofeng DM-32UV DMR handheld. Fixes #NNNN.
+Adds a driver for the Baofeng DM-32UV DMR handheld. Fixes #11840.
 
 **What it supports**
 - Download and upload, channels 1–4000: name, frequencies, duplex, 3 power levels, FM/NFM/DMR, CTCSS/DCS.
