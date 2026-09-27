@@ -684,3 +684,55 @@ for n in range(1, 4001):
 elapsed = time.time() - t0
 assert elapsed < 10, '%.1f s to read 4000 channels' % elapsed
 print('OK: 4000 channels with 800 contacts read in %.1f s' % elapsed)
+
+# 31. APRS settings and the per-channel report channel: edited on the
+#     Settings tab, uploaded, stored as the CPS stores them; bad coordinates
+#     refused; the password bytes next to them untouched.
+def aprs_radio(b):
+    b.set_memory(mem(5, 'DMR Rpt', 441000000, 'DMR'))
+    b._put(0x04, 0x431, b'1234\xff\xff\xff\xff')     # a password value, flag off
+
+
+flash31 = small_radio([(1, 146520000)], [('A', [1])], aprs_radio)
+SP31 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash31[a + PAGE - 1] == 0x04][0]
+r = download(flash31, 90)
+settings = r.get_settings()
+st = settings_dict(settings)
+assert 'Current Channel' in st['set_set_aprs_report_channel_1'].value.get_options()
+assert '5: DMR Rpt' in st['set_set_aprs_report_channel_1'].value.get_options()
+assert '1: Ch1' not in st['set_set_aprs_report_channel_1'].value.get_options(), 'analog offered'
+for key, value in (('send_interval', '120 s'), ('fixed_beacon', True),
+                   ('latitude', '5.5'), ('lat_hemi', 'S'), ('longitude', '118'),
+                   ('lon_hemi', 'W'), ('upload_number', 310999), ('call_type', 'Group'),
+                   ('active_delay', '300 ms'), ('report_channel_1', '5: DMR Rpt')):
+    st['set_set_aprs_' + key].value = value
+r.set_settings(settings)
+m = r.get_memory(5)
+for s_ in m.extra:
+    if s_.get_name() == 'aprs_channel':
+        s_.value = '2'
+r.set_memory(m)
+upload(r, flash31, 91)
+page = flash31[SP31:SP31 + PAGE]
+assert page[0x301] == 4 and page[0x302] & 1 == 1
+assert page[0x306:0x30F] == b'05.500000' and page[0x30F] == 1
+assert page[0x310:0x319] == b'118.00000' and page[0x319] == 1
+assert page[0x31E:0x320] == b'\x05\x00' and page[0x320:0x32E] == bytes(14)
+assert page[0x330] == 3 and page[0x331] & 1 == 1
+assert page[0x332:0x335] == (310999).to_bytes(3, 'little')
+assert page[0x431:0x435] == b'1234', 'password bytes changed'
+r2 = download(flash31, 92)
+got = {k: str(v.value) for k, v in settings_dict(r2.get_settings()).items()}
+assert (got['set_set_aprs_latitude'], got['set_set_aprs_longitude']) == ('5.500000', '118.00000')
+assert got['set_set_aprs_report_channel_1'] == '5: DMR Rpt'
+assert int(r2._chan(5).aprs_channel) == 1
+for bad in ('91', '-1', 'north'):
+    settings = r2.get_settings()
+    settings_dict(settings)['set_set_aprs_latitude'].value = bad
+    try:
+        r2.set_settings(settings)
+        raise AssertionError('latitude %r accepted' % bad)
+    except errors.InvalidValueError:
+        pass
+print('OK: APRS settings and report channel uploaded in the CPS format')

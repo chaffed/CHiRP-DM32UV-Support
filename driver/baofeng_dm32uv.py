@@ -130,7 +130,7 @@ struct chan {
      colorcode:4;
   u8 privacy;
   u8 unknown1f:1, encrypt:1, rxgroup:6;
-  u8 unknown20;
+  u8 aprs_channel;
   u8 rxtone[2];
   u8 txtone[2];
   u8 unknown25:2, compander:1, vox:1, unknown25b:4;
@@ -237,6 +237,22 @@ struct {
   u8 mic_analog;
   u8 mic_digital;
 } set_opts;
+#seekto 0x%(b301)x;
+struct {
+  u8 send_interval;
+  u8 unknown302:7, fixed_beacon:1;
+  u8 unknown303[3];
+  char latitude[9];
+  u8 lat_hemi;
+  char longitude[9];
+  u8 lon_hemi;
+  u8 unknown31a[4];
+  ul16 report_channel[8];
+  u8 unknown32e[2];
+  u8 active_delay;
+  u8 unknown331:7, call_type:1;
+  ul24 upload_number;
+} set_aprs;
 #seekto 0x%(b500)x;
 struct {
   u8 unknown500:6, new_zone:1, zone_list:1;
@@ -263,7 +279,7 @@ def _mem_format():
     fmt = [CHAN_FORMAT,
            SETTINGS_FORMAT % dict(b=b, b30=b + 0x30, b40=b + 0x40,
                                   b60=b + 0x60, b80=b + 0x80, ba0=b + 0xA0,
-                                  b500=b + 0x500),
+                                  b301=b + 0x301, b500=b + 0x500),
            '#seekto 0x%x;\nul16 ch_count;' % CH_BASE,
            '#seekto 0x%x;\nstruct chan page0[84];' % (CH_BASE + 0x10)]
     for p in range(1, 48):
@@ -449,6 +465,54 @@ RADIO_SETTINGS.append(('GPS and recording', [
     ('set_gps', 'record_type', 'Recording type',
      'list', (['Receive', 'Transmit', 'Receive+Transmit'], 0)),
 ]))
+# APRS (CPS dialog 0x439c00, accessors 0x488580-0x488cb0). The radio
+# reports its position over DMR: to the "upload number" (a DMR ID) as a
+# private or group call, on one of 8 report channels chosen per channel.
+# Coordinates are 9 ASCII characters, e.g. "23.000000" / "118.00000"; the
+# hemisphere is separate.
+RADIO_SETTINGS.append(('APRS', [
+    ('set_aprs', 'send_interval', 'Scheduled send time',
+     'list', (['Off'] + ['%d s' % i for i in range(30, 7201, 30)], 0)),
+    ('set_aprs', 'fixed_beacon', 'Fixed beacon (use the position below)',
+     'bool', None),
+    ('set_aprs', 'latitude', 'Latitude (degrees)', 'coord', 90),
+    ('set_aprs', 'lat_hemi', 'Latitude N/S', 'list', (['N', 'S'], 0)),
+    ('set_aprs', 'longitude', 'Longitude (degrees)', 'coord', 180),
+    ('set_aprs', 'lon_hemi', 'Longitude E/W', 'list', (['E', 'W'], 0)),
+    ('set_aprs', 'upload_number', 'Upload number (DMR ID, 0 = none)',
+     'int', (0, DMR_ID_MAX)),
+    ('set_aprs', 'call_type', 'Call type',
+     'list', (['Private', 'Group'], 0)),                   # [AprsCallType]
+    ('set_aprs', 'active_delay', 'Repeater active delay',
+     'list', (['Off'] + ['%d ms' % i for i in range(100, 1001, 100)], 0)),
+] + [('set_aprs', 'report_channel', 'Report channel %d' % (i + 1),
+      'channel', i) for i in range(8)]))
+
+
+def _format_coord(value, limit):
+    """A coordinate as the CPS stores it (0x488750, 0x488950): 9 chars,
+    e.g. "05.500000", "23.000000", "118.00000"; at most `limit`."""
+    for decimals in (6, 5):
+        text = '%.*f' % (decimals, value)
+        if len(text) < 9:
+            text = '0' + text
+        if len(text) == 9:
+            break
+    if float(text) >= limit:
+        text = '%.*f' % (6 if limit < 100 else 5, limit)
+    return text
+
+
+def _parse_coord(raw):
+    """Stored coordinate bytes -> text as the CPS shows it, or ''."""
+    text = raw.split(b'\x00')[0].split(b'\xFF')[0].decode('latin-1')
+    try:
+        float(text)
+    except ValueError:
+        return ''
+    return text[1:] if text.startswith('0') and len(text) > 1 else text
+
+
 _MENU = [
     ('zone_list', 'Zone list'), ('new_zone', 'New zone'),
     ('call_alert', 'Call alert'), ('radio_check', 'Radio check'),
@@ -504,6 +568,8 @@ LIST_EXTRAS = {
     'ptt_id': ('PTT ID', ['Off', 'BOT', 'EOT', 'Both']),   # [ChannelPttId]
     # [ChannelAprsReport]
     'aprs_report': ('APRS report (DMR)', ['Off', 'Digital']),
+    # one of the 8 report channels of the APRS settings
+    'aprs_channel': ('APRS report channel', [str(i) for i in range(1, 9)]),
 }
 # [ChAnaTxAdmit] for analog channels, [ChDigTxAdmit] for digital ones
 TX_ADMIT = {False: ['Allow TX', 'Channel Idle', 'Match CTC', 'Non Match CTC'],
@@ -1520,6 +1586,19 @@ class DM32UV(chirp_common.CloneModeRadio):
                                    if c in chirp_common.CHARSET_ASCII)
                     value = RadioSettingValueString(0, extra, text,
                                                     autopad=False)
+                elif kind == 'coord':
+                    value = RadioSettingValueString(
+                        0, 12, _parse_coord(getattr(obj, field).get_raw()),
+                        autopad=False)
+                elif kind == 'int':
+                    lo, hi = extra
+                    number = int(getattr(obj, field))
+                    value = RadioSettingValueInteger(
+                        lo, hi, number if lo <= number <= hi else lo)
+                elif kind == 'channel':
+                    name = 'set_%s_%s_%d' % (sname, field, extra + 1)
+                    value = self._channel_choice(
+                        int(getattr(obj, field)[extra]))
                 else:
                     options, offset = extra
                     index = int(getattr(obj, field)) - offset
@@ -1528,6 +1607,49 @@ class DM32UV(chirp_common.CloneModeRadio):
                 group.append(RadioSetting(name, label, value))
             top.append(group)
         return top
+
+    def _channel_choice(self, value):
+        """Report channel choice: the current channel, or a digital one."""
+        options = ['Current Channel'] + self._digital_channels()
+        current = 'Current Channel' if not value else '%d: %s' % (
+            value, self._channel_names().get(value, '(empty)'))
+        if current not in options:
+            options.append(current)
+        return RadioSettingValueList(options,
+                                     current_index=options.index(current))
+
+    @_cached
+    def _channel_names(self):
+        """{number: name} of the channels in use."""
+        names = {}
+        for n in range(1, self._count() + 1):
+            _mem = self._chan(n)
+            if _mem.rxfreq.get_raw() not in (b'\xFF' * 4, b'\x00' * 4):
+                names[n] = _shown(str(_mem.name).rstrip('\x00\xFF '))
+        return names
+
+    @_cached
+    def _digital_channels(self):
+        names = self._channel_names()
+        return ['%d: %s' % (n, names[n]) for n in names
+                if self._chan(n).chtype in (1, 3)]
+
+    @staticmethod
+    def _set_coord(field, label, limit, text):
+        """Store a coordinate typed on the Settings tab, if it changed."""
+        if text == _parse_coord(field.get_raw()):
+            return
+        if not text:
+            field.set_raw(b'\x00' * 9)
+            return
+        try:
+            value = float(text)
+        except ValueError:
+            value = -1
+        if not 0 <= value <= limit:
+            raise errors.InvalidValueError(
+                '%s must be a number from 0 to %d' % (label, limit))
+        field.set_raw(_format_coord(value, limit).encode())
 
     def set_settings(self, settings):
         values = {}
@@ -1543,10 +1665,26 @@ class DM32UV(chirp_common.CloneModeRadio):
         for title, entries in RADIO_SETTINGS:
             for sname, field, label, kind, extra in entries:
                 name = 'set_%s_%s' % (sname, field)
+                if kind == 'channel':
+                    name = 'set_%s_%s_%d' % (sname, field, extra + 1)
                 if name not in values:
                     continue
                 obj = getattr(self._memobj, sname)
-                if kind == 'bool':
+                if kind == 'coord':
+                    self._set_coord(getattr(obj, field), label, extra,
+                                    str(values[name]).strip())
+                elif kind == 'int':
+                    lo, hi = extra
+                    number = int(getattr(obj, field))
+                    new = int(values[name])
+                    if new != (number if lo <= number <= hi else lo):
+                        setattr(obj, field, new)
+                elif kind == 'channel':
+                    choice = str(values[name])
+                    new = int(choice.split(':')[0]) if ':' in choice else 0
+                    if new != int(getattr(obj, field)[extra]):
+                        getattr(obj, field)[extra] = new
+                elif kind == 'bool':
                     setattr(obj, field, int(bool(values[name])))
                 elif kind == 'text':
                     text = str(values[name]).rstrip()
