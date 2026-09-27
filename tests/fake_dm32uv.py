@@ -146,7 +146,11 @@ class FakeRadio:
         if b[:1] == b'V':
             if len(b) < 5:
                 return 0
-            self._reply(self._v(b[4]), True)
+            if b[3] == 0x40:            # radio info blob (64 bytes)
+                body = bytes.fromhex('034e2d') + bytes(29) + b'\x3f' + bytes(31)
+                self._reply(b'V' + bytes([b[4], 0x40]) + body, True)
+            else:
+                self._reply(self._v(b[4]), True)
             return 5
         if b[:1] == b'G' and st == 'top' or (
                 b[:1] in (b'R', b'G', b'W', b'S', b'D') and st == 'session'):
