@@ -2,7 +2,7 @@
 
 ---
 
-I've written a driver for this radio (the Baofeng DM-32UV; it identifies itself as `DP570UV`) and opened a pull request: PR_LINK
+I've written a driver for this radio (the Baofeng DM-32UV; it identifies itself as `DP570UV`) and opened a pull request: https://github.com/kk7ds/chirp/pull/1656
 
 It supports download and upload of channels 1–4000 (name, frequencies, duplex, power, FM/NFM/DMR, CTCSS/DCS), the main DMR channel fields (color code, time slot, TX contact, RX group list, encryption key) and zones as banks, including creating a new zone. Radio-wide settings and editing the contact lists aren't supported yet.
 

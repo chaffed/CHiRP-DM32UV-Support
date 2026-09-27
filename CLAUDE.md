@@ -83,7 +83,9 @@ as `Fixes #NNNN`.
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").
    Texts in `docs/upstream/`: the PR description, and a comment for #11840 to post after
-   the PR is open. Waiting for the user: fork kk7ds/chirp, push the branch, open the PR.
+   the PR is open. **PR opened 2026-09-27: https://github.com/kk7ds/chirp/pull/1656**
+   (fork chaffed/chirp, branch dm32uv, commit 3d2264d). Next: post the #11840 comment,
+   then respond to review; any fixes go on the same branch.
    Publish as "chaffed" only (see memory), never a real name.
 
 ## Firmware notes
