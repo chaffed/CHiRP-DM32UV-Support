@@ -71,10 +71,10 @@ assert code == 0 and not writes and 'nothing to do' in out, out
 print('OK: restore of an identical page writes nothing')
 
 # 5. Tags the driver never uploads are refused before anything is sent.
-for tag in ('02', '69', '03'):
+for tag in ('02', '69', '65'):
     code, writes, out = run('--noop', tag, '--yes', seed=5)
     assert code == 2 and not writes and 'only pages the driver uploads' in out, out
-print('OK: tags 02, 69 and 03 refused')
+print('OK: tags 02, 69 and 65 refused')
 
 # 6. A tag the radio has no page for is refused.
 code, writes, out = run('--noop', '20', '--yes', seed=6)

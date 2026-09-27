@@ -108,7 +108,7 @@ READ_COPIES, READ_TRIES = 3, 10
 # references. One whole aligned page per W frame: the firmware erases the
 # sector on an aligned W and also erases the next sector if a W crosses
 # into it. Tags 0x02 and 0x69 look like calibration: never written.
-UPLOAD_TAGS = ([0x04, 0x06, RADIOID_TAG] +
+UPLOAD_TAGS = ([0x03, 0x04, 0x06, RADIOID_TAG] +
                list(range(CONTACT_REC_TAG0, CONTACT_REC_TAG0 + 5)) +
                [CONTACT_INDEX_TAG, RXG_TAG, SCAN_TAG] +
                list(range(0x12, 0x42)) + list(TXC_TAGS) +
@@ -310,15 +310,60 @@ struct {
 } dtmf_contacts[%d];
 """ % ('\n'.join('  u8 code%d[16];' % i for i in range(1, DTMF_CODES + 1)),
        DTMF_CONTACTS)
+# Two-tone (tag 0x03; CPS dialogs 0x45a760 system, 0x45ac30 decode,
+# 0x45ae20 encode; accessors 0x479df0-0x47a7a0). Times in 0.1 s,
+# frequencies in 0.1 Hz. Five-tone is on the same page from 0x730.
+SIGNAL_TAG, TT_ENCODE, TT_DECODE = 0x03, 32, 4
+TT_FORMAT = """
+#seekto 0x%%(b1)x;
+u8 tt_encode_count;
+#seekto 0x%%(b30)x;
+struct {
+  u8 pre_carrier;
+  u8 first_tone;
+  u8 second_tone;
+  u8 long_tone;
+  u8 interval;
+  u8 unknown35;
+  u8 polite_wait;
+  ul16 freq_a;
+  ul16 freq_b;
+  ul16 freq_c;
+  ul16 freq_d;
+  u8 unknown3f:6, side_tone:1, idle_ack:1;
+  u8 auto_reset;
+%s
+} twotone;
+#seekto 0x%%(b220)x;
+struct {
+  u8 name[32];
+  u8 unknown20:7, single_tone:1;
+  u8 unknown21;
+  ul16 tone1;
+  ul16 tone2;
+  u8 unknown26[2];
+} tt_encode[%d];
+""" % ('\n'.join('  u8 dec%d_format;\n  u8 dec%d_call;\n'
+                 '  u8 dec%d_unknown:7, dec%d_reply:1;\n  u8 dec%d_unknown2;'
+                 % ((i,) * 5) for i in range(1, TT_DECODE + 1)), TT_ENCODE)
+TT_HZ = (2885, 31068)            # frequency limits in 0.1 Hz (CPS 0x45a760)
+# [TwoToneDecodeFormat] and the stored codes (CPS 0x47a1f0)
+TT_DECODE_FORMATS = ['None', 'A-B', 'A-C', 'A-D', 'B-A', 'B-C', 'B-D', 'C-A',
+                     'C-B', 'C-D', 'D-A', 'D-B', 'D-C', 'Long A', 'Long B',
+                     'Long C', 'Long D']
+TT_DECODE_CODES = [0xFF, 0x01, 0x02, 0x03, 0x10, 0x12, 0x13, 0x20, 0x21,
+                   0x23, 0x30, 0x31, 0x32, 0x0F, 0x1F, 0x2F, 0x3F]
 # The page each settings struct lives on.
-STRUCT_TAGS = {'dtmf': DTMF_TAG}
+STRUCT_TAGS = {'dtmf': DTMF_TAG, 'twotone': SIGNAL_TAG}
 
 
 def _mem_format():
     """Channel pages as the CPS lays them out (see channel_offset)."""
     b = IMAGE_TAGS.index(0x04) * PAGE      # settings come first: lowest slot
     d = IMAGE_TAGS.index(DTMF_TAG) * PAGE
+    t = IMAGE_TAGS.index(SIGNAL_TAG) * PAGE
     fmt = [CHAN_FORMAT,
+           TT_FORMAT % dict(b1=t + 1, b30=t + 0x30, b220=t + 0x220),
            SETTINGS_FORMAT % dict(b=b, b30=b + 0x30, b40=b + 0x40,
                                   b60=b + 0x60, b80=b + 0x80, ba0=b + 0xA0,
                                   b301=b + 0x301, b500=b + 0x500),
@@ -564,6 +609,38 @@ RADIO_SETTINGS.append(('DTMF', [
      for i in range(1, DTMF_CODES + 1)]))
 
 
+def _tenths(first, last, unit='s'):
+    return ['%.1f %s' % (i / 10, unit) for i in range(first, last + 1)]
+
+
+RADIO_SETTINGS.append(('Two-tone', [
+    ('twotone', 'freq_a', 'Tone A frequency (Hz)', 'hz', TT_HZ),
+    ('twotone', 'freq_b', 'Tone B frequency (Hz)', 'hz', TT_HZ),
+    ('twotone', 'freq_c', 'Tone C frequency (Hz)', 'hz', TT_HZ),
+    ('twotone', 'freq_d', 'Tone D frequency (Hz)', 'hz', TT_HZ),
+    ('twotone', 'pre_carrier', 'Pre-carrier time', 'list',
+     (_tenths(0, 50), 0)),
+    ('twotone', 'first_tone', 'First tone duration', 'list',
+     (_tenths(5, 40), 5)),
+    ('twotone', 'second_tone', 'Second tone duration', 'list',
+     (_tenths(5, 40), 5)),
+    ('twotone', 'long_tone', 'Long tone duration', 'list',
+     (_tenths(5, 100), 5)),
+    ('twotone', 'interval', 'Interval time', 'list', (_tenths(0, 20), 0)),
+    ('twotone', 'polite_wait', 'Polite wait time', 'list',
+     (_tenths(0, 50), 0)),
+    ('twotone', 'auto_reset', 'Auto reset time', 'list', (
+        ['%d s' % i for i in range(1, 256)], 1)),
+    ('twotone', 'idle_ack', 'Idle ack', 'bool', None),
+    ('twotone', 'side_tone', 'Side tone', 'bool', None),
+] + [entry for i in range(1, TT_DECODE + 1) for entry in (
+    ('twotone', 'dec%d_format' % i, 'Decode %d: format' % i, 'list',
+     (TT_DECODE_FORMATS, TT_DECODE_CODES)),
+    ('twotone', 'dec%d_call' % i, 'Decode %d: call type' % i, 'list', (
+        ['None', 'Call Alert', 'Voice Call Alert', 'Select Call'], 0)),
+    ('twotone', 'dec%d_reply' % i, 'Decode %d: reply' % i, 'bool', None))]))
+
+
 def _list_index(stored, offset):
     """List position of a stored value; offset is added to the position,
     or is the list of stored values."""
@@ -574,6 +651,18 @@ def _list_index(stored, offset):
 
 def _list_stored(index, offset):
     return offset[index] if isinstance(offset, list) else index + offset
+
+
+def _parse_hz(text, limits, label):
+    """'321.7' -> 3217 (0.1 Hz), within limits."""
+    try:
+        tenths = round(float(text) * 10)
+    except ValueError:
+        tenths = -1
+    if not limits[0] <= tenths <= limits[1]:
+        raise errors.InvalidValueError('%s must be %.1f to %.1f Hz' % (
+            label, limits[0] / 10, limits[1] / 10))
+    return tenths
 
 
 def _dtmf_text(raw, chars=DTMF_CHARS):
@@ -1673,10 +1762,87 @@ class DM32UV(chirp_common.CloneModeRadio):
         groups_out = [dmr, scan, zones]
         if self._has_page(DTMF_TAG):
             groups_out.append(self._dtmf_contacts_group())
+        if self._has_page(SIGNAL_TAG):
+            groups_out.append(self._tt_encode_group())
         radio = self._radio_settings()
         if len(radio):
             groups_out.insert(0, radio)
         return RadioSettings(*groups_out)
+
+    def _tt_encode(self):
+        """[(name, single tone, tone 1, tone 2)] of two-tone encode
+        entries 1..count (tones in 0.1 Hz)."""
+        count = int(self._memobj.tt_encode_count)
+        count = count if 1 <= count <= TT_ENCODE else 1    # as the CPS
+        out = []
+        for e in list(self._memobj.tt_encode)[:count]:
+            raw = e.name.get_raw()
+            name = raw.decode('utf-16-le', 'replace').split('\x00')[0]
+            if raw[:2] == b'\xFF\xFF':
+                name = ''
+            out.append((name, bool(e.single_tone), int(e.tone1),
+                        int(e.tone2)))
+        return out
+
+    def _tt_encode_group(self):
+        group = RadioSettingGroup('tt_encode', 'Two-tone encode')
+        entries = self._tt_encode()
+        for n in range(1, min(len(entries) + 4, TT_ENCODE) + 1):
+            name, single, t1, t2 = entries[n - 1] if n <= len(entries) \
+                else ('', False, 0, 0)
+            group.append(RadioSetting(
+                'tte_%d_name' % n, 'Encode %d: name (empty = unused)' % n,
+                RadioSettingValueString(0, 16, _shown(name), autopad=False)))
+            group.append(RadioSetting(
+                'tte_%d_single' % n, 'Encode %d: send' % n,
+                RadioSettingValueList(['Dual Tone', 'Single Tone'],
+                                      current_index=int(single))))
+            for k, tone in ((1, t1), (2, t2)):
+                group.append(RadioSetting(
+                    'tte_%d_tone%d' % (n, k), 'Encode %d: tone %d (Hz)' % (
+                        n, k),
+                    RadioSettingValueString(
+                        0, 7, '%.1f' % (tone / 10)
+                        if TT_HZ[0] <= tone <= TT_HZ[1] else '',
+                        autopad=False, charset='0123456789.')))
+        return group
+
+    def _set_tt_encode(self, values):
+        old = self._tt_encode()
+        new = list(old)
+        for n in range(1, TT_ENCODE + 1):
+            if 'tte_%d_name' % n not in values:
+                continue
+            o = old[n - 1] if n <= len(old) else ('', False, 0, 0)
+            name = _edited(values['tte_%d_name' % n], o[0])
+            tones = []
+            for k in (1, 2):
+                text = str(values['tte_%d_tone%d' % (n, k)]).strip()
+                shown = '%.1f' % (o[1 + k] / 10) \
+                    if TT_HZ[0] <= o[1 + k] <= TT_HZ[1] else ''
+                tones.append(o[1 + k] if text == shown else _parse_hz(
+                    text, TT_HZ, 'Two-tone encode %d, tone %d' % (n, k)))
+            single = str(values['tte_%d_single' % n]) == 'Single Tone'
+            while len(new) < n:
+                new.append(('', False, 0, 0))
+            new[n - 1] = (name, single, tones[0], tones[1])
+        while len(new) > 1 and not new[-1][0]:
+            new.pop()
+        if new == old:
+            return
+        self._forget()
+        for n, (name, single, t1, t2) in enumerate(new, 1):
+            e = self._memobj.tt_encode[n - 1]
+            if n > len(old) or old[n - 1][0] != name:
+                e.name.set_raw(name.encode('utf-16-le')[:32].ljust(32, b'\x00'))
+            if n > len(old) and e.get_raw()[0x20:] == b'\xFF' * 8:
+                e.set_raw(e.get_raw()[:0x20] + b'\xFE\xFF' + b'\xFF' * 6)
+            e.single_tone = int(single)
+            e.tone1, e.tone2 = t1, t2
+        for n in range(len(new) + 1, len(old) + 1):
+            self._memobj.tt_encode[n - 1].set_raw(b'\x00' * 0x20 +
+                                                  b'\xFF' * 8)
+        self._memobj.tt_encode_count = len(new)
 
     def _has_page(self, tag):
         return self._page(tag)[1][:PAGE - 1] != b'\xFF' * (PAGE - 1)
@@ -1771,6 +1937,12 @@ class DM32UV(chirp_common.CloneModeRadio):
                     name = 'set_%s_%s_%d' % (sname, field, extra + 1)
                     value = self._channel_choice(
                         int(getattr(obj, field)[extra]))
+                elif kind == 'hz':
+                    tenths = int(getattr(obj, field))
+                    value = RadioSettingValueString(
+                        0, 7, '%.1f' % (tenths / 10)
+                        if extra[0] <= tenths <= extra[1] else '',
+                        autopad=False, charset='0123456789.')
                 elif kind == 'dtmf':
                     value = RadioSettingValueString(
                         0, extra, _dtmf_text(getattr(obj, field).get_raw()),
@@ -1873,6 +2045,13 @@ class DM32UV(chirp_common.CloneModeRadio):
                     old = str(getattr(obj, field)).split('\x00')[0]
                     if text != old.split('\xFF')[0]:
                         setattr(obj, field, text[:extra].ljust(extra, '\x00'))
+                elif kind == 'hz':
+                    tenths = int(getattr(obj, field))
+                    text = str(values[name]).strip()
+                    shown = '%.1f' % (tenths / 10) \
+                        if extra[0] <= tenths <= extra[1] else ''
+                    if text != shown:
+                        setattr(obj, field, _parse_hz(text, extra, label))
                 elif kind in ('dtmf', 'digits'):
                     chars = DTMF_CHARS if kind == 'dtmf' else '0123456789'
                     raw = getattr(obj, field)
@@ -1896,6 +2075,8 @@ class DM32UV(chirp_common.CloneModeRadio):
         self._forget()
         if self._has_page(DTMF_TAG):
             self._set_dtmf_contacts(values)
+        if self._has_page(SIGNAL_TAG):
+            self._set_tt_encode(values)
 
         # Radio IDs: keep the ones with an ID, in order; renumber channels.
         old = self._radio_ids()

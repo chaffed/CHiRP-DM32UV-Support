@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'driver'))
 import fake_dm32uv as fake  # noqa: E402
 import baofeng_dm32uv as drv  # noqa: E402
 from chirp import chirp_common, errors, memmap  # noqa: E402
+from chirp import settings as chirp_settings  # noqa: E402
 
 time.sleep = fake.virtual_sleep
 PAGE = drv.PAGE
@@ -814,3 +815,63 @@ try:
 except errors.InvalidValueError:
     pass
 print('OK: DTMF options, codes, contacts and channel signaling systems uploaded')
+
+
+# 33. Two-tone (tag 0x03): system, decode entries and the encode list
+#     (UTF-16 names), in the CPS format.
+def signal_page():
+    page = bytearray(b'\xff' * (PAGE - 1))
+    page[0x001] = 2
+    page[0x030:0x041] = bytes([5, 5, 5, 5, 0, 0xFF, 0]) + bytes.fromhex(
+        '910c4124ca17d64fff') + bytes([10])
+    page[0x041:0x051] = bytes.fromhex('0103ffff' '0301ffff' '1202ffff' '1300ffff')
+    for n, (name, a, b_) in enumerate(((u'Call 1', 3217, 9281), (u'Call 2', 3217, 6090)), 1):
+        rec = 0x1F8 + 0x28 * n
+        page[rec:rec + 0x20] = name.encode('utf-16-le').ljust(0x20, b'\x00')
+        page[rec + 0x20:rec + 0x28] = b'\xfe\xff' + a.to_bytes(2, 'little') + \
+            b_.to_bytes(2, 'little') + b'\xff\xff'
+    for n in range(3, 33):
+        rec = 0x1F8 + 0x28 * n
+        page[rec:rec + 0x28] = b'\x00' * 0x20 + b'\xff' * 8
+    return page
+
+
+flash33 = small_radio([(1, 146520000)], [('A', [1])],
+                      lambda b: b._put(0x03, 0, bytes(signal_page())))
+SG33 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
+        if flash33[a + PAGE - 1] == 0x03][0]
+r = download(flash33, 96)
+settings = r.get_settings()
+st = settings_dict(settings)
+got = {k: str(v.value) for k, v in st.items()}
+assert (got['set_twotone_freq_a'], got['set_twotone_freq_d'], got['set_twotone_first_tone'],
+        got['set_twotone_auto_reset'], got['set_twotone_dec1_format'],
+        got['set_twotone_dec1_call'], got['set_twotone_dec3_format'],
+        got['tte_2_name'], got['tte_2_tone2']) == (
+    '321.7', '2043.8', '0.5 s', '10 s', 'A-B', 'Select Call', 'B-C', 'Call 2', '609.0'), got
+r.set_settings(settings)
+assert r.get_mmap().get(drv.IMAGE_TAGS.index(0x03) * PAGE, PAGE - 1) == bytes(signal_page())
+for key, value in (('set_twotone_freq_b', '1000'), ('set_twotone_long_tone', '2.5 s'),
+                   ('set_twotone_dec2_format', 'Long D'), ('set_twotone_dec2_reply', False),
+                   ('set_twotone_side_tone', True), ('tte_1_name', 'Fire'),
+                   ('tte_3_name', 'New'), ('tte_3_tone1', '1500.5'),
+                   ('tte_3_tone2', '2000'), ('tte_3_single', 'Single Tone')):
+    st[key].value = value
+r.set_settings(settings)
+upload(r, flash33, 97)
+page = flash33[SG33:SG33 + PAGE]
+assert page[0x39:0x3B] == (10000).to_bytes(2, 'little') and page[0x33] == 25
+assert page[0x45] == 0x3F and page[0x47] & 1 == 0 and page[0x3F] & 2 == 2
+assert page[0x001] == 3 and page[0x220:0x228] == 'Fire'.encode('utf-16-le')
+assert page[0x270:0x278] == 'New'.encode('utf-16-le') + b'\x00\x00'
+assert page[0x290] & 1 == 1 and page[0x292:0x296] == (15005).to_bytes(2, 'little') + \
+    (20000).to_bytes(2, 'little')
+for bad in ('100', '4000', 'x'):
+    settings = r.get_settings()
+    try:
+        settings_dict(settings)['set_twotone_freq_c'].value = bad
+        r.set_settings(settings)
+        raise AssertionError('frequency %r accepted' % bad)
+    except (errors.InvalidValueError, chirp_settings.InvalidValueError):
+        pass
+print('OK: two-tone system, decode and encode list uploaded in the CPS format')
