@@ -845,6 +845,9 @@ class DM32UV(chirp_common.CloneModeRadio):
                 RadioSettingValueList(CALL_TYPES, current_index=ctype)))
         groups = RadioSettingGroup('rx_groups', 'RX group lists')
         by_id = {c[1]: c[0] for c in used.values()}
+        # CHIRP keeps showing this tree after later edits, so remember the
+        # names shown here: a member name stays valid after a rename.
+        self._shown_contact_ids = {c[0]: c[1] for c in used.values()}
         existing = self._rx_groups()
         spare = [n for n in range(1, RXG_MAX + 1) if n not in existing][:3]
         for n in sorted(existing) + spare:
@@ -896,9 +899,11 @@ class DM32UV(chirp_common.CloneModeRadio):
 
         # Contacts: an empty name frees the slot.
         contacts = self._contacts()
-        # RX group members are shown by name; accept the names from before
-        # this edit too (a renamed contact keeps its ID).
-        by_name = {c[0]: c[1] for c in contacts.values()}
+        # RX group members are shown by name; accept the names shown when
+        # the settings were read and those from before this edit too (a
+        # renamed contact keeps its ID).
+        by_name = dict(getattr(self, '_shown_contact_ids', {}))
+        by_name.update({c[0]: c[1] for c in contacts.values()})
         for k in range(1, CONTACT_MAX + 1):
             if 'con_%d_name' % k not in values:
                 continue

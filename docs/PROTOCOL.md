@@ -404,6 +404,12 @@ with the zone switch). The same re-read showed the radio had **cleaned up its st
 pages in use fell from 191 to 71, and the zone page had moved. The radio reclaims stale
 (tag 0x00) pages by itself at some point.
 
+**Contact edit from CHIRP (2026-09-27).** Contact 1 renamed "Contacts 1" (ID 1) → "TG 91" (ID 91)
+on the Settings tab and uploaded. The diff showed exactly the record's name and ID bytes on page 0x44
+and the rebuilt index on page 0x0B (name- and ID-sorted lists re-ordered). The radio's index is
+byte-identical to the CPS rebuild algorithm, and the radio showed "TG 91" as the contact and as
+channel 1's TX contact.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction

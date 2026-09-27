@@ -335,3 +335,19 @@ try:
 except errors.InvalidValueError as e:
     assert 'Nobody' in str(e)
 print('OK: unknown RX group member refused')
+
+
+# 17. As in the CHIRP GUI: rename a contact, then (in a later, separate edit
+#     of the same, never-refreshed settings tree) change an RX group whose
+#     text still shows the old name.
+r14 = download(flash, 33)
+settings = r14.get_settings()
+st = settings_dict(settings)
+old_name = st['con_1_name'].value.get_value()
+st['con_1_name'].value = 'Renamed TG'
+r14.set_settings(settings)
+st['rxg_1_members'].value = str(st['rxg_1_members'].value) + ', Carol'
+r14.set_settings(settings)
+assert old_name in str(st['rxg_1_members'].value)
+assert r14._rx_groups()[1][1] == [3100, 1234567], r14._rx_groups()
+print('OK: RX group edit after a contact rename in an earlier edit')
