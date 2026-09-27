@@ -9,9 +9,9 @@ for the work; **risk** is the chance of harming a radio's data if the feature is
 
 | # | Feature | Value | Effort | Risk | Status |
 |---|---------|-------|--------|------|--------|
-| 1 | [DMR radio ID](#1-dmr-radio-id) | Very high | S–M | Low | **done** (radio test pending) |
-| 2 | [Talkgroup / contact list editing](#2-talkgroup--contact-list-editing) | Very high | M | Medium | **done** (radio test pending) |
-| 3 | [RX group list editing](#3-rx-group-list-editing) | High | S | Low | **done** (radio test pending) |
+| 1 | [DMR radio ID](#1-dmr-radio-id) | Very high | S–M | Low | **done** |
+| 2 | [Talkgroup / contact list editing](#2-talkgroup--contact-list-editing) | Very high | M | Medium | **done** |
+| 3 | [RX group list editing](#3-rx-group-list-editing) | High | S | Low | **done** |
 | 4 | [Remaining channel options](#4-remaining-channel-options) | Medium | S | Low | |
 | 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium | |
 | 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | |

@@ -410,6 +410,11 @@ and the rebuilt index on page 0x0B (name- and ID-sorted lists re-ordered). The r
 byte-identical to the CPS rebuild algorithm, and the radio showed "TG 91" as the contact and as
 channel 1's TX contact.
 
+**RX group and radio ID from CHIRP (2026-09-27).** RX group 1's members edited by name
+(`TG 91, Contacts 2, …`) and channel 1's radio ID set to Default, uploaded from the GUI. The
+diff was exactly member 1 of group 1 (`01` → `5b`, ID 91) and channel 1 `+2b` `02` → `00`,
+and the radio showed both.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction
