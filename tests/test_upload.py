@@ -351,3 +351,29 @@ r14.set_settings(settings)
 assert old_name in str(st['rxg_1_members'].value)
 assert r14._rx_groups()[1][1] == [3100, 1234567], r14._rx_groups()
 print('OK: RX group edit after a contact rename in an earlier edit')
+
+# 18. Remaining channel options: set them all through the extras, upload,
+#     read back. TX admit follows the analog/digital list of the channel.
+r15 = download(flash, 34)
+m = r15.get_memory(1)                                   # analog FM channel
+want = {'vox': True, 'compander': True, 'ptt_id_display': True, 'lone_work': True,
+        'auto_scan': True, 'aprs_rx': True, 'aprs_ptt_analog': True,
+        'aprs_ptt_digital': True, 'emerg_indicator': True, 'emerg_ack': True,
+        'private_confirm': True, 'short_data_confirm': True, 'tdma_direct': True,
+        'tx_admit': 'Non Match CTC', 'rx_squelch_mode': 'CTC | Optional Signaling',
+        'signaling': 'Two Tone', 'ptt_id': 'Both', 'aprs_report': 'Digital'}
+for x in m.extra:
+    if x.get_name() in want:
+        x.value = want[x.get_name()]
+r15.set_memory(m)
+upload(r15, flash, 35)
+got = {x.get_name(): x.value.get_value() for x in download(flash, 36).get_memory(1).extra}
+assert all(got[k] == v for k, v in want.items()), {k: (got[k], v) for k, v in want.items()
+                                                   if got[k] != v}
+_c = download(flash, 37)._chan(1)
+assert (int(_c.tx_admit), int(_c.signaling), int(_c.ptt_id), int(_c.rx_squelch_mode)) == \
+    (3, 2, 3, 3)
+m = r15.get_memory(3)                                   # a DMR channel
+assert [x.value.get_options() for x in m.extra if x.get_name() == 'tx_admit'][0] == \
+    ['Always', 'Channel Idle', 'Color Code Idle']
+print('OK: remaining channel options set, uploaded and read back')

@@ -63,6 +63,7 @@ radio back (only the expected bytes changed) and on the radio's own display.
 |------|-----------|
 | **Channels** (1–4000) | Name, RX/TX frequency, duplex and offset, power (Low/Middle/High), FM/NFM/DMR, CTCSS and DCS tones, adding channels |
 | **DMR per channel** | Color code, time slot, TX contact, radio ID, RX group list, encryption on/off and key |
+| **Channel options** | TX admit, RX squelch mode, signaling type, PTT ID, VOX, compander, APRS, emergency, TDMA direct and more, as extra fields (decoded from the CPS; a radio check of a few is pending) |
 | **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
 | **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
 | **Transfer** | Download; upload of only what changed, each page read back and checked |
