@@ -3,9 +3,9 @@
 A [CHIRP](https://chirpmyradio.com) driver for the **Baofeng DM-32UV** DMR handheld, plus
 the tools and notes used to build it.
 
-> **Status:** download, upload, zones and the main DMR channel fields work, tested on a real
-> radio (firmware DM32.01.01.047). The driver has been submitted to CHIRP as
-> [pull request #1656](https://github.com/kk7ds/chirp/pull/1656)
+> **Status:** channels, zones and DMR (contacts, RX groups, your radio IDs) can be downloaded,
+> edited and uploaded, all tested on a real radio (firmware DM32.01.01.047). The driver has
+> been submitted to CHIRP as [pull request #1656](https://github.com/kk7ds/chirp/pull/1656)
 > (issue [#11840](https://chirpmyradio.com/issues/11840)). Until it is merged, you can load
 > it into CHIRP yourself as described below.
 
@@ -53,6 +53,47 @@ need to switch it off and on.
 
 **Not supported yet:** radio-wide settings (menu options, welcome text, …) and editing
 encryption keys (you can choose one per channel). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
+
+## What works
+
+Everything below was uploaded from CHIRP to a real radio and checked twice: by reading the
+radio back (only the expected bytes changed) and on the radio's own display.
+
+| Area | Supported |
+|------|-----------|
+| **Channels** (1–4000) | Name, RX/TX frequency, duplex and offset, power (Low/Middle/High), FM/NFM/DMR, CTCSS and DCS tones, adding channels |
+| **DMR per channel** | Color code, time slot, TX contact, radio ID, RX group list, encryption on/off and key |
+| **Zones** | Shown as CHIRP banks: add and remove channels, rename zones, create new zones |
+| **DMR lists** (Settings tab) | Your radio IDs, contacts / talkgroups (name, ID, call type; up to 800), RX group lists |
+| **Transfer** | Download; upload of only what changed, each page read back and checked |
+
+## How we got here
+
+1. **Protocol, from the vendor software.** The Windows programming software (CPS v1.60)
+   was taken apart with Ghidra to learn the serial protocol and the "tagged page" layout.
+2. **First contact with the radio.** The reads turned out to be unreliable: the cable flips
+   one bit in about 1 byte in 1000. The vendor software doesn't check for errors at all, so the
+   tools read every block three times and merge the copies. Reads became byte-for-byte
+   repeatable.
+3. **Mapping the data.** Each field was found in two ways: from the CPS's own code for each
+   field (offsets, bit masks, value lists, labels), and by changing one setting on the radio,
+   reading it back and diffing. Channels, zones, contacts, RX groups and radio IDs are
+   documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+4. **The radio's firmware.** The firmware update file turned out to be unencrypted C-SKY code.
+   Reading its programming handler showed exactly how writes work (sector erase, no
+   verification), and that the cable only corrupts data coming *from* the radio. This set the
+   rules the upload follows.
+5. **A simulated radio.** [`tests/fake_dm32uv.py`](tests/fake_dm32uv.py) behaves like the
+   firmware, including the noisy link and injected write errors. Every upload feature was
+   developed against it before touching the real radio.
+6. **Careful first writes.** A full backup, then a write that rewrote a page with its own
+   contents, then one renamed channel, each checked by a full re-read. Only then was upload
+   switched on in the driver.
+7. **CHIRP driver and submission.** Download, upload, zones and DMR lists were added one at a
+   time, each confirmed on the radio. The driver passes CHIRP's own test suite with a synthetic
+   test image (no real data), and was submitted as pull request #1656.
+
+What's next is in the [roadmap](docs/ROADMAP.md).
 
 ## How it works, briefly
 
