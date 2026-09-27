@@ -377,3 +377,21 @@ m = r15.get_memory(3)                                   # a DMR channel
 assert [x.value.get_options() for x in m.extra if x.get_name() == 'tx_admit'][0] == \
     ['Always', 'Channel Idle', 'Color Code Idle']
 print('OK: remaining channel options set, uploaded and read back')
+
+# 19. Adding a channel past a gap: the skipped channels must read as empty,
+#     even if they held factory template data (as on the real radio, where
+#     records past the count hold e.g. 400.000 MHz).
+r16 = download(flash, 38)
+count = r16._count()
+template = b'\xff' * 16 + bytes.fromhex('00000040000000400000000030000000') + b'\x00' * 16
+r16._chan(count + 1).set_raw(template)
+assert r16.get_memory(count + 1).empty          # past the count: hidden
+r16.set_memory(mem(count + 3, 'After gap', 146400000))
+assert r16._count() == count + 3
+assert r16.get_memory(count + 1).empty and r16.get_memory(count + 2).empty, \
+    'a gap channel shows up as a phantom channel'
+upload(r16, flash, 39)
+r17 = download(flash, 40)
+assert [r17.get_memory(n).empty for n in (count + 1, count + 2)] == [True, True]
+assert r17.get_memory(count + 3).name == 'After gap'
+print('OK: channels skipped by a new channel read as empty')
