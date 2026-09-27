@@ -415,6 +415,10 @@ channel 1's TX contact.
 diff was exactly member 1 of group 1 (`01` → `5b`, ID 91) and channel 1 `+2b` `02` → `00`,
 and the radio showed both.
 
+**Channel options from CHIRP (2026-09-27).** Channel 10: VOX on, PTT ID BOT, TX admit Channel
+Idle; channel 2: TX admit Color Code Idle. The diff was exactly ch 2 `+1a` `00` → `20`, ch 10
+`+1a` `00` → `10`, `+25` `00` → `10`, `+29` `00` → `04`, and the radio showed all four.
+
 **Link direction.** Checking the echoed `R` headers in six full-read logs (5496
 requests, 32976 bytes sent): 19 corrupted reply headers, every one a bit-7 flip with the data
 from the right page. **No request ever arrived corrupted.** So the PC→radio direction

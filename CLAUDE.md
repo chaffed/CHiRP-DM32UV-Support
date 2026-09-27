@@ -80,8 +80,7 @@ as `Fixes #NNNN`.
 3. Feature work follows `docs/ROADMAP.md` (ranked by value). Items 1-3 (radio IDs,
    contacts, RX groups on the Settings tab; TX contact from the 0x42/0x43 table) are
    implemented and verified on the radio (contact rename, RX group edit, radio ID choice).
-   Item 4 (remaining channel options as extras) implemented and simulator-tested; radio check
-   pending. Next: channel deletion/gaps, scan lists, settings. Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
+   Item 4 (remaining channel options as extras) done and verified on the radio. Next: channel deletion/gaps, scan lists, settings. Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").
