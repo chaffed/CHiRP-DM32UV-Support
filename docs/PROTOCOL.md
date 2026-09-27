@@ -311,13 +311,26 @@ plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
 | 0x31 | auto backlight duration | not decoded |
 | 0x32 | menu exit time | Off, 5–60 s step 5 |
 | 0x33 | 4 volume change prompt, 3 date format, 0 time display | |
-| 0x34, 0x35, 0x38–0x3B | display colours (`[DisplayColor]`) | not in the driver yet |
+| 0x34, 0x35, 0x38–0x3B | colours: call display, standby text, A/B channel name, A/B zone (`[DisplayColor]`: White, Black, Orange, Red, Yellow, Green, Cyan, Blue) | |
 | 0x36, 0x37 | TX backlight delay (Off, 1–30), RX backlight delay (Always, 1–30) | |
-| 0x40–0x45 | GPS and record options | not in the driver yet |
-| 0x60–0x67 | DMR options (call match, decodes, data service, name format) | not in the driver yet |
+| 0x40 | 6 GPS display format, 5–4 speed unit, 3–2 GPS mode (GPS, BDS, GPS+BDS), 1 distance unit, 0 GPS on | |
+| 0x41 | time zone (UTC −12 … +13) | |
+| 0x42 | GPS measure period, 5–255 s (stored − 5) | |
+| 0x45 | 2–1 record type (RX, TX, both), 0 recording on | |
+| 0x60 | 1 group call match, 0 private call match | |
+| 0x61 | call hold time 1–60 s | |
+| 0x62 | active wait time 300–4800 ms step 30 (stored = position + 1) | |
+| 0x63 | active retries 1–8 (stored = position + 1) | |
+| 0x64 | pre-carrier time 120–8640 ms step 120 | |
+| 0x65 | 7 remote monitor decode, 6 radio disable decode, 5 radio check decode, 4 radio enable decode, 3 call alert decode, 2–1 SMS format (H/M/D-SMS), 0 missed call alert | |
+| 0x66 | remote monitor time 10–120 s step 10 | |
+| 0x67 | 7–6 name data format, 3 send TX name, 2 name display priority | |
 | 0x80 | 7–6 dual watch (Single, Double Wait, Single Wait), 5 main line A/B, 4/3 B/A display mode, 2/1 B/A work mode (VFO/MR), 0 only channel mode | bits 1–5 are the radio's live display state: upload keeps the radio's own |
 | 0x81 | dual watch hang time | 0–6500 ms step 500 |
-| 0x85–0x93 | key lock and programmable keys (`[KeyFuncData]`) | not in the driver yet |
+| 0x85 | 3 forbid lock key, 2 side key lock, 1 knob lock, 0 keypad lock Manual/Auto | |
+| 0x86 | auto keypad lock delay 5–60 s | |
+| 0x87–0x92 | key functions (`[KeyFuncData]`, 43 entries), short/long pairs: TK, SK2, SK1, P3, P2, P1. The pairing is structural; which key owns which pair is inferred from the dialog's control order (the test radio's defaults fit: TK FM Radio/GPS, SK2 Monitor/Power) | |
+| 0x93 | long press time 1–5 | |
 | 0xA0 | TOT | Off, 15–495 s step 5 |
 | 0xA1 | TOT pre-alert | Off, 1–10 s |
 | 0xA2 | VOX level | 1–5 |
@@ -327,7 +340,7 @@ plausible values (TOT 120 s, TBST 1750 Hz, "Welcome"/"DM-32UV").
 | 0xA6, 0xA7 | analog mic level (1–5); digital mic (Enhance MIC 1–3, not decoded) | |
 | 0x300–0x332 | APRS | not in the driver yet |
 | 0x430–0x443 | power-on / read / write passwords | not in the driver (never touch) |
-| 0x500–0x507 | menu permissions (which menu items the radio shows) | not in the driver yet |
+| 0x500–0x507 | menu items the radio shows (45 bits, labels from the CPS; 0x503 bits 0–1 unknown) | |
 
 *Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
 from 0x301, 32 × 44 bytes: 10-char name, type byte, key) are chosen per channel, not edited

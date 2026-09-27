@@ -86,7 +86,8 @@ as `Fixes #NNNN`.
    radio tests: rely on CPS/firmware analysis + tests/fake_dm32uv.py, and label features
    "not checked on a radio" in docs. Item 7 (common radio settings, tag 0x04) done the same
    way. Item 9 (zone management on the Settings tab) done. Item 8 skipped (needs a .048
-   tester). Next: 10 (remaining settings), 11 (auto-detect). Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
+   tester). Item 10 mostly done (keys, colours, GPS, recording, DMR options, menu items;
+   not APRS/signalling/passwords). Next: 11 (auto-detect). Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").

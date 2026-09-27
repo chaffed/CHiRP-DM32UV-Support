@@ -496,3 +496,24 @@ for bad, text in (('zone_order', '1, 1'), ('zone_1_members', '9999'), ('zone_ord
     except errors.InvalidValueError:
         pass
 print('OK: zones reordered and deleted from the Settings tab; pointers follow; bad input refused')
+
+# 23. More radio settings: a key function, a colour, the time zone, DMR
+#     timing, a menu item; upload and read back; stored-offset fields.
+r23 = download(flash, 54)
+settings = r23.get_settings()
+st = settings_dict(settings)
+st['set_set_work_key_p1_short'].value = 'Flashlight'
+st['set_set_display_a_zone_color'].value = 'Green'
+st['set_set_gps_time_zone'].value = 'UTC +1:00'
+st['set_set_dmr_active_wait'].value = '360 ms'
+st['set_set_dmr_active_retries'].value = '5'
+st['set_set_menu_gps'].value = not st['set_set_menu_gps'].value.get_value()
+r23.set_settings(settings)
+upload(r23, flash, 55)
+got = {k: v.value.get_value() for k, v in settings_dict(download(flash, 56).get_settings()).items()}
+assert (got['set_set_work_key_p1_short'], got['set_set_display_a_zone_color'],
+        got['set_set_gps_time_zone'], got['set_set_dmr_active_wait'],
+        got['set_set_dmr_active_retries']) == ('Flashlight', 'Green', 'UTC +1:00', '360 ms', '5')
+assert flash[SP + 0x91] == 41 and flash[SP + 0x3A] == 5 and flash[SP + 0x41] == 13
+assert flash[SP + 0x62] == 3 and flash[SP + 0x63] == 5, 'stored as list position + 1'
+print('OK: keys, colours, GPS, DMR timing and menu items uploaded and read back')
