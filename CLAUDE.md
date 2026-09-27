@@ -77,9 +77,10 @@ as `Fixes #NNNN`.
    Zones are CHIRP banks, with a spare "New zone" bank for creating the next zone (also
    proven on the radio). Proven on the radio: a channel added to a zone in the GUI's Banks tab and uploaded appeared correctly,
    and only the zone page changed. Upload from the GUI therefore works too.
-3. Feature work follows `docs/ROADMAP.md` (ranked by value): radio ID, contact editing,
-   RX group editing, remaining channel options, channel deletion/gaps, scan lists,
-   settings. Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
+3. Feature work follows `docs/ROADMAP.md` (ranked by value). Items 1-3 (radio IDs,
+   contacts, RX groups on the Settings tab; TX contact from the 0x42/0x43 table) are
+   implemented and simulator-tested, not yet tested on the radio or pushed to the PR. Next:
+   remaining channel options, channel deletion/gaps, scan lists, settings. Method: CPS accessors (`re/BufRefs.java`, `re/DecompRefs.java`).
 4. Upstream: prepared. Branch `dm32uv` in `../chirp` (one commit by chaffed, driver +
    synthetic image from `tools/make_test_image.py` + tester line; tox style/unit/driver
    pass). It references the existing issue #11840 ("New Model: Baofeng DM-UV32").

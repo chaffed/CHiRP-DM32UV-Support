@@ -43,12 +43,12 @@ def build_radio():
     for z, name, members in ((1, 'Analog', [1, 2]), (2, 'Mixed', [3, 90, 1])):
         blank._zone(z).name = name.ljust(16, '\x00')
         blank._set_zone_members(z, members)
-    for kind, names in (('contact', ['Alice', 'Bob TG']), ('rxgroup', ['Group A', 'Group B']),
-                        ('privacy', ['Key 1'])):
-        tag, first, size, length, _count = drv.DMR_LISTS[kind]
-        base = drv.IMAGE_TAGS.index(tag) * PAGE + first
-        for i, name in enumerate(names):
-            blank.get_mmap().set(base + i * size, name.encode().ljust(length, b'\x00'))
+    blank._set_radio_ids([(1111111, 'Me'), (2222222, 'Club')])
+    blank._set_contacts({1: ('Alice', 3100, 1), 2: ('Bob TG', 91, 1)})
+    blank._set_rx_groups({1: ('Group A', [3100]), 2: ('Group B', [91, 3100])})
+    tag, first, size, length, _count = drv.DMR_LISTS['privacy']
+    base = drv.IMAGE_TAGS.index(tag) * PAGE + first
+    blank.get_mmap().set(base, b'Key 1'.ljust(length, b'\x00'))
     img = blank.get_mmap().get_packed()
     slot = lambda t: img[drv.IMAGE_TAGS.index(t) * PAGE:][:PAGE]  # noqa: E731
     rng = random.Random(7)
@@ -58,7 +58,8 @@ def build_radio():
              0x04: (0x04C000, rng.randbytes(PAGE)),
              0x5C: (0x040000, slot(0x5C)),
              0x67: (0x009000, slot(0x67)), 0x0F: (0x00F000, slot(0x0F)),
-             0x10: (0x00C000, slot(0x10))}
+             0x10: (0x00C000, slot(0x10)), 0x0B: (0x00D000, slot(0x0B)),
+             0x44: (0x00E000, slot(0x44))}
     flash = fake.make_flash(pages, stale=(0x010000, 0x023000))
     return flash, pages
 
@@ -220,25 +221,33 @@ assert [b.get_name() for b in download(flash, 19).get_bank_model().get_mappings(
 print('OK: zone rename uploaded')
 
 
-# 12. DMR list fields: pick a TX contact, RX group list and key by name.
+# 12. DMR channel fields: TX contact, radio ID, RX group list and key by name.
 r7 = download(flash, 20)
 m = r7.get_memory(3)
 extra = {x.get_name(): x for x in m.extra}
 assert list(extra['tx_contact'].value.get_options()) == ['None', '1: Alice', '2: Bob TG']
+assert list(extra['radio_id'].value.get_options()) == \
+    ['Default', '1: Me (1111111)', '2: Club (2222222)']
 extra['tx_contact'].value = '2: Bob TG'
+extra['radio_id'].value = '2: Club (2222222)'
 extra['rxgroup'].value = '1: Group A'
 extra['privacy'].value = '1: Key 1'
 extra['encrypt'].value = True
 extra['timeslot'].value = '2'
 r7.set_memory(m)
 n, writes, _ = upload(r7, flash, 21)
-assert n == 1, n
-got = {x.get_name(): str(x.value) for x in download(flash, 22).get_memory(3).extra}
-assert (got['tx_contact'], got['rxgroup'], got['privacy'], got['encrypt'], got['timeslot']) == \
-    ('2: Bob TG', '1: Group A', '1: Key 1', 'True', '2'), got
-_c = download(flash, 23)._chan(3)
-assert (int(_c.tx_contact), int(_c.rxgroup), int(_c.privacy), int(_c.timeslot)) == (2, 1, 1, 1)
-print('OK: TX contact, RX group list, key and time slot set by name and uploaded')
+assert n == 2, n                            # channel page + TX contact table (new page)
+r7b = download(flash, 22)
+got = {x.get_name(): str(x.value) for x in r7b.get_memory(3).extra}
+assert (got['tx_contact'], got['radio_id'], got['rxgroup'], got['privacy'], got['encrypt'],
+        got['timeslot']) == ('2: Bob TG', '2: Club (2222222)', '1: Group A', '1: Key 1',
+                             'True', '2'), got
+_c = r7b._chan(3)
+assert (int(_c.radio_id), int(_c.rxgroup), int(_c.privacy), int(_c.timeslot)) == (2, 1, 1, 1)
+assert r7b._tx_contact(3) == 2
+tag, off = r7b._txc_loc(3)
+assert r7b._page(tag)[1][off] & 1 == 1, 'digital flag not set for a DMR channel'
+print('OK: TX contact, radio ID, RX group list, key and time slot set by name and uploaded')
 
 
 # 13. Creating a zone: the spare "New zone" becomes zone 3 when a channel is
@@ -273,3 +282,56 @@ r11 = download(flash, 29)
 assert r11._zone_count() == 29 and r11._zone_members(29) == [1]
 assert r11.get_bank_model().get_mappings()[28].get_name() == 'Zone 29'
 print('OK: zone 29 created on a newly allocated second zone page')
+
+
+# 15. Settings tab: edit radio IDs, contacts and RX groups, upload, read back.
+def settings_dict(settings):
+    out = {}
+
+    def walk(group):
+        for el in group:
+            if hasattr(el, 'value'):
+                out[el.get_name()] = el
+            else:
+                walk(el)
+    walk(settings)
+    return out
+
+
+r12 = download(flash, 30)
+settings = r12.get_settings()
+st = settings_dict(settings)
+st['con_1_name'].value = 'Alice 2'              # rename
+st['con_2_name'].value = ''                     # delete Bob TG (used by channel 3)
+st['con_3_name'].value = 'Carol'                # new contact in a free slot
+st['con_3_id'].value = 1234567
+st['con_3_type'].value = 'Private Call'
+st['rid_1_id'].value = 0                        # delete radio ID 1 ("Me")
+st['rid_3_id'].value = 3333333                  # add a radio ID
+st['rid_3_name'].value = 'Third'
+st['rxg_2_members'].value = 'Carol, 91'
+r12.set_settings(settings)
+assert r12._contacts() == {1: ('Alice 2', 3100, 1), 3: ('Carol', 1234567, 0)}
+assert r12._radio_ids() == [(2222222, 'Club'), (3333333, 'Third')]
+assert r12._tx_contact(3) == 0, 'channel still points at the deleted contact'
+assert int(r12._chan(3).radio_id) == 1, 'radio ID 2 should now be 1 (Club)'
+assert r12._rx_groups()[2] == ('Group B', [1234567, 91])
+upload(r12, flash, 31)
+r13 = download(flash, 32)
+assert r13._contacts() == r12._contacts() and r13._radio_ids() == r12._radio_ids()
+assert r13._rx_groups() == r12._rx_groups()
+# the index page must be exactly what a rebuild from the records gives
+idx_before = r13._page(drv.CONTACT_INDEX_TAG)[1]
+r13._set_contacts(r13._contacts())
+assert r13._page(drv.CONTACT_INDEX_TAG)[1] == idx_before
+print('OK: Settings tab edits (contacts, radio IDs, RX groups) uploaded and consistent')
+
+# 16. An unknown contact name in an RX group is refused.
+settings = r13.get_settings()
+settings_dict(settings)['rxg_1_members'].value = 'Nobody'
+try:
+    r13.set_settings(settings)
+    raise AssertionError('unknown contact accepted')
+except errors.InvalidValueError as e:
+    assert 'Nobody' in str(e)
+print('OK: unknown RX group member refused')

@@ -7,19 +7,19 @@ zones; see the [README](../README.md).
 **Value** is how much a typical DM-32UV owner gains; **effort** S/M/L is a rough size
 for the work; **risk** is the chance of harming a radio's data if the feature is wrong.
 
-| # | Feature | Value | Effort | Risk |
-|---|---------|-------|--------|------|
-| 1 | [DMR radio ID](#1-dmr-radio-id) | Very high | S–M | Low |
-| 2 | [Talkgroup / contact list editing](#2-talkgroup--contact-list-editing) | Very high | M | Medium |
-| 3 | [RX group list editing](#3-rx-group-list-editing) | High | S | Low |
-| 4 | [Remaining channel options](#4-remaining-channel-options) | Medium | S | Low |
-| 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium |
-| 6 | [Scan lists](#6-scan-lists) | Medium | M | Low |
-| 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium |
-| 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low |
-| 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low |
-| 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium |
-| 11 | [Automatic radio detection](#11-automatic-radio-detection) | Low | S | Low |
+| # | Feature | Value | Effort | Risk | Status |
+|---|---------|-------|--------|------|--------|
+| 1 | [DMR radio ID](#1-dmr-radio-id) | Very high | S–M | Low | **done** (radio test pending) |
+| 2 | [Talkgroup / contact list editing](#2-talkgroup--contact-list-editing) | Very high | M | Medium | **done** (radio test pending) |
+| 3 | [RX group list editing](#3-rx-group-list-editing) | High | S | Low | **done** (radio test pending) |
+| 4 | [Remaining channel options](#4-remaining-channel-options) | Medium | S | Low | |
+| 5 | [Channel deletion and gaps](#5-channel-deletion-and-gaps) | Medium | S | Medium | |
+| 6 | [Scan lists](#6-scan-lists) | Medium | M | Low | |
+| 7 | [Common radio settings](#7-common-radio-settings) | Medium–high | M | Medium | |
+| 8 | [Firmware 1.01.048 check](#8-firmware-101048-check) | Medium (growing) | S* | Low | |
+| 9 | [Zone management polish](#9-zone-management-polish) | Low–medium | S | Low | |
+| 10 | [Remaining radio settings](#10-remaining-radio-settings) | Low–medium | L | Medium | |
+| 11 | [Automatic radio detection](#11-automatic-radio-detection) | Low | S | Low | |
 
 \* needs a tester whose radio runs firmware .048.
 

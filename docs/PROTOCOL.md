@@ -232,21 +232,48 @@ radio's display; *CPS* = accessor and dialog only.
 | 0x29 | 7–4 | Step | 2.5, 5, 6.25, 10, 12.5, 25, 50, 100 kHz `[ChannelStepFreq]` | CPS |
 | 0x29 | 3–2 | PTT ID | 0 Off, 1 BOT, 2 EOT, 3 Both `[ChannelPttId]` | data |
 | 0x2A | byte | Unknown, 1–8 in the dialog | index 0–7 | CPS |
-| 0x2B | byte | TX contact | 0 none, n = contact n of tag 0x67 (up to 250) | upload |
+| 0x2B | byte | Radio ID | 0 = default, n = radio ID n of tag 0x67 (up to 250). *Was mislabelled "TX contact" at first; the TX contact is in a separate table (see DMR lists).* | upload |
 | 0x2C | 4 bytes | VFO only: repeater offset, BCD like the frequencies | | CPS |
 
-**Lists the DMR fields point into.** Found from the CPS name getters and checked against
-the test radio's data (entry n, 1-based; names NUL- or `ff`-padded):
+**DMR lists.** From the CPS accessors and the dialogs that use them (`[RadioIdList]`,
+`[NormalContact]`, `[RxGroupList]` in the language file), checked against the test radio.
+Entries are 1-based; names are NUL- or `ff`-padded.
 
-| List | Tag | Entry n at | Size | Name | Max | Test radio |
-|------|-----|-----------|------|------|-----|------------|
-| TX contacts | 0x67 | 0x03 + 0x10 × n (u16 count at 0) | 16 | 16 | 250 | count 5: `Radio 1`…`Radio 5` |
-| RX group lists | 0x0F | 0x11 + 0x6D × (n−1) | 109 | 11 | 32 | `RX Group 1`… Members follow the name as 3-byte contact numbers (group 1 = 1–5) |
-| Emergency systems | 0x10 | 0x14 × (n−1) | 20 | 10 | 8 | `DEmer 1`… |
-| Encryption keys | 0x10 | 0x301 + 0x2C × (n−1) | 44 | 10 | 32 | `Encrypt 1`…: name, type byte, key |
+*Radio IDs* (tag 0x67; the radio's own DMR IDs; CPS `0x474140`–`0x474450`): byte 0 = count
+(max 250); entry n at 16 × n = u24 LE DMR ID + 12-char name. Channel byte `+0x2b` selects
+one (0 = default). *An earlier version of these notes called this list "TX contacts"; that was
+wrong.*
 
-The contact names in tag 0x67 carry no IDs; the IDs are probably in the big contacts area
-(V15). Not needed for choosing a TX contact by name.
+*Contacts* (talkgroups and private IDs; up to 800; CPS `0x474b50`–`0x4758e0`):
+
+| Where | Contents |
+|-------|----------|
+| tag 0x0B +0x00 | u16 number of contacts |
+| tag 0x0B +0x02 | u16 number of Group Call contacts; +0x04 u8 number of All Call contacts |
+| tag 0x0B +0x10 | 100-byte bitmap, bit k−1 set = slot k **free** |
+| tag 0x0B +0x100 | used contacts sorted by name (byte order), 2 bytes each: slot (12 bits) with the call-type code (3/4/5) in the top nibble; the rest `ff` |
+| tag 0x0B +0x740 | the same entries sorted by DMR ID |
+| tags 0x44–0x48 | records: slot k on page 0x44 + (k−1)/170 at 24 × ((k−1) mod 170) |
+| record +0x02 | name, 16 bytes |
+| record +0x13 | u24 LE DMR ID (1–16776415, or 16777215 for All Call) |
+| record +0x16 | call type code: 3 Private, 4 Group, 5 All Call |
+| record +0x00, +0x12, +0x17 | 0 on the test radio (unknown) |
+
+The index is rebuilt from the records whenever contacts change (CPS `0x474c00`); a rebuild
+from the test radio's records reproduced its index page exactly.
+
+*TX contact per channel* is **not** in the channel record: 2 bytes per channel on tags
+0x42/0x43 (CPS `0x480050`). Channel n < 2048: page 0x42 at 2 × (n − 1); n ≥ 2048: page 0x43
+at 2 × (n mod 2048); VFO A/B: page 0x43 at 0xFFA/0xFFC. First byte: high nibble = contact slot
+bits 8–11, bit 0 = channel is digital; second byte = slot bits 0–7. 0 = none.
+
+*RX group lists* (tag 0x0F; up to 32; CPS `0x477c50`–`0x478280`): bytes 0–3 = bitmap of
+used groups; group n at 0x6D × n − 0x5C: 11-char name, 32 members as **u24 LE DMR IDs**
+(not contact slots), 2 unknown bytes (and one before each record, `01` before group 1).
+
+*Emergency systems* (tag 0x10, 8 × 20 bytes, 10-char names) and *encryption keys* (tag 0x10
+from 0x301, 32 × 44 bytes: 10-char name, type byte, key) are chosen per channel, not edited
+by the driver.
 
 **Tones** (0x21, 0x23), two bytes; the second holds the flags:
 `ff ff` = none. CTCSS: tenths of a Hz as 4 BCD digits, little-endian

@@ -35,11 +35,15 @@ need to switch it off and on.
 
 - **Channels only show on the radio if they are in a zone.** In CHIRP, zones are in the
   **Banks** tab. To make a new zone, tick channels into the last column, **"New zone"**.
-- **DMR settings** (color code, time slot, TX contact, RX group list, encryption key) are
-  extra fields: turn on **View → Show extra fields**, or open a channel's properties.
-- **What upload changes:** only the channel and zone data that differs from the radio. Every
-  page it writes is read back to check it. Radio-wide settings, contacts, RX group lists and keys
-  aren't changed.
+- **DMR settings** per channel (color code, time slot, TX contact, radio ID, RX group list,
+  encryption key) are extra fields: turn on **View → Show extra fields**, or open a channel's
+  properties.
+- **Your DMR IDs, contacts (talkgroups) and RX group lists** are on CHIRP's **Settings**
+  tab, under "DMR lists". Leave a name empty to delete an entry; empty rows at the end are
+  for adding new ones.
+- **What upload changes:** only the channels, zones, radio IDs, contacts and RX group lists
+  that differ from the radio. Every page it writes is read back to check it. Radio-wide settings
+  and encryption keys aren't changed.
 - **Cable:** the usual cable has a CH340 chip. On Linux it appears as `/dev/ttyUSB0`; add
   yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log out and
   back in). On macOS, Apple's built-in driver may not work; WCH's CH34x driver may help.
@@ -47,9 +51,8 @@ need to switch it off and on.
   backup first, and please report how it went in
   [issue #11840](https://chirpmyradio.com/issues/11840).
 
-**Not supported yet:** radio-wide settings (menu options, welcome text, …), and editing the
-contact list, RX group lists and encryption keys (you can choose them per channel, but not
-edit them). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
+**Not supported yet:** radio-wide settings (menu options, welcome text, …) and editing
+encryption keys (you can choose one per channel). See the [roadmap](docs/ROADMAP.md) for what's planned, in order.
 
 ## How it works, briefly
 

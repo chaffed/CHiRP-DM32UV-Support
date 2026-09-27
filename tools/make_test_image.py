@@ -3,7 +3,7 @@
 
 Everything in it is made up here; no data from a real radio. Channels
 cover analog and DMR, all tone modes, duplex variants and power levels;
-there are two zones and short contact, RX group and key lists.
+there are two zones, radio IDs, contacts, RX group lists and a key.
 
     python3 make_test_image.py tests/images/Baofeng_DM-32UV.img
 """
@@ -42,13 +42,18 @@ CHANNELS = [
     (14, 'Odd step', 434043500, 'FM', '', 0, 2, {}),
 ]
 DMR_EXTRA = {10: {'colorcode': 1, 'timeslot': '1', 'tx_contact': '1: Local',
-                  'rxgroup': '1: Local RX'},
+                  'rxgroup': '1: Local RX', 'radio_id': '1: Main (1234567)'},
              11: {'colorcode': 1, 'timeslot': '2', 'tx_contact': '2: Worldwide',
                   'rxgroup': '2: Wide RX'},
-             12: {'colorcode': 3, 'timeslot': '1', 'tx_contact': '3: Test Call'}}
-LISTS = {'contact': ['Local', 'Worldwide', 'Test Call'],
-         'rxgroup': ['Local RX', 'Wide RX'],
-         'privacy': ['Test key']}
+             12: {'colorcode': 3, 'timeslot': '1', 'tx_contact': '3: Test Call',
+                  'radio_id': '2: Spare (7654321)'}}
+# Made-up IDs: radio IDs (id, name); contacts slot: (name, id, call type);
+# RX groups n: (name, member IDs)
+RADIO_IDS = [(1234567, 'Main'), (7654321, 'Spare')]
+CONTACTS = {1: ('Local', 9, 1), 2: ('Worldwide', 91, 1),
+            3: ('Test Call', 1000001, 0), 4: ('All Call', 16777215, 2)}
+RX_GROUPS = {1: ('Local RX', [9]), 2: ('Wide RX', [9, 91])}
+LISTS = {'privacy': ['Test key']}
 ZONES = [('Analog', [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 14]),
          ('Digital', [10, 11, 12])]
 
@@ -61,6 +66,9 @@ def build():
         base = drv.IMAGE_TAGS.index(tag) * PAGE + first
         for i, name in enumerate(names):
             mmap.set(base + i * size, name.encode().ljust(length, b'\x00'))
+    radio._set_radio_ids(RADIO_IDS)
+    radio._set_contacts(CONTACTS)
+    radio._set_rx_groups(RX_GROUPS)
     for number, name, freq, mode, duplex, offset, power, tones in CHANNELS:
         mem = chirp_common.Memory(number)
         mem.name, mem.freq, mem.mode = name, freq, mode
