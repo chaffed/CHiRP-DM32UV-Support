@@ -6,7 +6,7 @@ Paste each reply under the matching review comment.
 
 ## 1–2. Tone masking (`_decode_tone`)
 
-Done in e5e59e3. The tone is now a struct in the memory format:
+Done in aa53d01. The tone is now a struct in the memory format:
 
 ```
 struct tone {
@@ -59,7 +59,8 @@ literal string if you'd prefer that.
 
 ## 5. Link reliability
 
-You were right: the link shouldn't need that, and it doesn't. It was the cable.
+You were right: the link shouldn't need that, and it doesn't. It was the cable. That's just
+what you said about testing more than one cable before blaming the radio.
 
 The errors were always bit 7 flipping 0 → 1, and only on bytes from the radio, which looked
 like a clock mismatch. So I tried a second cable on the same radio. The original was the
@@ -74,7 +75,7 @@ bundled CH340 cable (1a86:7523); the new one has an FTDI FT231X:
 A download with the simplified driver (one read per block) then matched the old three-copy
 dump in every page.
 
-So in 52a9c68 the compensation is gone:
+So in aace83e the compensation is gone:
 
 - Each block is read once. A reply is only requested again if it's short or has the
   wrong header, which a sound USB link can still produce now and then.
