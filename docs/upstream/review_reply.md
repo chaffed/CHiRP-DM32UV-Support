@@ -59,38 +59,33 @@ literal string if you'd prefer that.
 
 ## 5. Link reliability
 
-You're right to be suspicious, and I agree it isn't good enough to ship as it is. Here's
-what I know and what I'm doing about it.
+You were right: the link shouldn't need that, and it doesn't. It was the cable.
 
-**What we measured.** On one radio and one cable (the CH340 cable that comes with it,
-Linux `ch341`), about 1 received byte in 700 was wrong. Every error had the same shape:
+The errors were always bit 7 flipping 0 → 1, and only on bytes from the radio, which looked
+like a clock mismatch. So I tried a second cable on the same radio. The original was the
+bundled CH340 cable (1a86:7523); the new one has an FTDI FT231X:
 
-- only bytes from the radio to the PC; the radio's echoed command headers show the
-  PC-to-radio direction arrived intact;
-- only bit 7;
-- only 0 → 1.
+| Cable | Data | Errors |
+|-------|------|--------|
+| CH340 | info queries, two sessions | 1 byte in 700, and 1 in 47 |
+| FTDI | info queries, 3,200 bytes | 0 |
+| FTDI | full read, 1,181 commands / 2.16 MB | 0 |
 
-Bit 7 is the last data bit before the stop bit, and the stop bit is always 1. So the
-receiver is sometimes sampling the stop bit instead of bit 7. That's the signature of a
-baud-rate mismatch, with the radio's UART running a bit fast relative to 115200, rather
-than random noise. The vendor programming software uses the same cable with no error
-checking at all, so its users would get silent corruption.
+A download with the simplified driver (one read per block) then matched the old three-copy
+dump in every page.
 
-**Next step.** Find the real rate: read the same blocks at a few rates close to 115200
-and see where the error rate drops to zero. If one rate fixes it, the driver will use it
-and the three-way read merge can go.
+So in 52a9c68 the compensation is gone:
 
-**Writes.** Nothing is ever written blind:
+- Each block is read once. A reply is only requested again if it's short or has the
+  wrong header, which a sound USB link can still produce now and then.
+- No bit-7 merging, no majority voting, and reply markers are checked exactly.
+- What a bad cable produces is treated as an error, not used: a page tag with bit 7 set
+  (real tags stop at 0x7c) or a non-ASCII model ID. That way a bad link can't make upload
+  think a page is missing.
+- A CH340 cable (USB 1a86:7523/5523) gets a log warning. If a transfer then fails, the
+  error message suggests an FTDI or CP2102 cable, since the CH340 cable is what comes in
+  the box with this radio.
+- Writes are still read back once and rewritten once if they don't match. If that fails
+  too, the upload stops with a message pointing at CHIRP's pre-upload backup.
 
-- only whole, aligned 4 KB pages go out;
-- a page is only written if it differs from what's on the radio;
-- each page is read back after writing;
-- pages that look like calibration are never touched.
-
-Even so, you're right that if a page still doesn't verify after the retries, the upload
-stops and that page may be bad until the next upload. (CHIRP's pre-upload backup, or a
-repeat upload, restores it.) I'm also looking at a safer write order the firmware seems
-to allow: write the new copy to a free page, verify it, and only then retire the old one.
-A failure would then leave the old page in place.
-
-I'll report back with the measurements before asking you to look at this part again.
+Downloads also got faster (about 70 s down to 30 s).
