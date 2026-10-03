@@ -40,7 +40,12 @@ aren't tied to a network or trunking system. That's why I used CHIRP banks: a zo
 named list of existing memories, a memory can be in several, and the order matters. In
 the Banks tab, a spare "New zone" column creates the next zone, because the radio keeps
 zones numbered 1..count without gaps. Reordering channels within a zone, and deleting or
-reordering zones, are on the Settings tab.
+reordering zones, are on the Settings tab, because the Banks tab can't reorder.
+
+There's precedent for this: `retevis_ha1g.py` and `radtel_rt880g.py` already back a
+`NamedBank` with the radio's zones, and `radtel_rt900.py` calls them "Banks (Zones)". The one
+difference is that this driver uses `MTOBankModel`, because on this radio a channel can be in
+several zones at once.
 
 ---
 
