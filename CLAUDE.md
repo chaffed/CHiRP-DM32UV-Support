@@ -50,9 +50,10 @@ as `Fixes #NNNN`.
   text is file `10`.
 - **Use the FTDI cable** (FT231X, 0403:6015, `/dev/ttyUSB0`). The bit-7 errors of the
   first cable (CH340, 1 byte in 700 to 1 in 47) were the cable: the FTDI cable read 2 MB
-  without an error (2026-10-02). Since then the driver reads each block once, retries only
-  short/malformed replies, rejects implausible page tags and non-ASCII model IDs, and warns
-  about CH340 cables; writes are still read back. Never send anything at a baud rate other
+  without an error (2026-10-02). Since then the driver reads each block once and treats any
+  bad reply as an error (no retries except PSEARCH, at the maintainer's request), rejects
+  implausible page tags and non-ASCII model IDs, and warns about CH340 cables; each write
+  is read back once and a mismatch stops the upload. Never send anything at a baud rate other
   than 115200: the radio hangs until power-cycled. After a normal session no power cycle is needed: the radio
   ends the session after 2 s idle and returns to its home screen by itself.
 - **CHIRP driver works, download and upload** (`driver/baofeng_dm32uv.py`): a real

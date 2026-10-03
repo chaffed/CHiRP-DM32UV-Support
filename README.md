@@ -122,9 +122,9 @@ The radio keeps its codeplug in 4 KB flash pages. The last byte of each page is 
 what the page holds, and the radio moves pages around as it rewrites them. The driver scans
 the tags and keeps a fixed "logical" image, one slot per tag.
 
-The protocol has no checksums, so the link must be sound: replies that are short or carry the
-wrong header are asked for again, and a page tag that can't be right stops the transfer. With
-a good cable (FTDI, CP2102) this is all it needs.
+The protocol has no checksums, so the link must be sound. The driver doesn't try to work
+around a bad one: any bad or missing reply, or a page tag that can't be right, stops the
+transfer with an error. With a good cable (FTDI, CP2102) that never happens.
 
 For writing, the radio's firmware erases a whole 4 KB sector on each page write. So the driver
 only ever writes whole, aligned pages, reads each one back, and never touches pages that look

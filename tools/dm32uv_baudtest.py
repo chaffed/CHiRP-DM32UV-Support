@@ -47,8 +47,9 @@ def measure(port, rate):
             resp = link.recv(REPLY)
             if len(resp) == REPLY:
                 replies.append(resp[3:])
-            else:
-                link.drain()
+            else:                       # drop the rest of a bad reply
+                time.sleep(0.1)
+                pipe.reset_input_buffer()
     finally:
         pipe.close()
     if len(replies) < 3:

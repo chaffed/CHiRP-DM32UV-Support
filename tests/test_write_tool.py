@@ -27,7 +27,7 @@ with open(os.path.join(tmp, 'backup', 'pages', 'tag12_005000.bin'), 'wb') as f:
 
 
 def run(*argv, seed=1):
-    radio = fake.FakeRadio(flash, fake.LOSSY, seed=seed)
+    radio = fake.FakeRadio(flash, fake.CLEAN, seed=seed)
     serial.Serial = lambda *a, **k: radio
     sys.argv = ['dm32uv_write.py', 'FAKE', '-o', os.path.join(tmp, 'log')] + list(argv)
     out = io.StringIO()

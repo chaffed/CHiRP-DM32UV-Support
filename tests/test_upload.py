@@ -1,9 +1,9 @@
 """Test the driver's upload against the simulated radio (fake_dm32uv.py).
 
-Every scenario runs over a link that cuts replies short now and then. The
-simulator records anything the firmware analysis says we must never do
-(unsafe W, S, touching tags 0x02/0x69), and every scenario checks that
-list is empty.
+The simulator records anything the firmware analysis says we must never
+do (unsafe W, S, touching tags 0x02/0x69), and every scenario checks that
+list is empty. The driver does not try to recover from a bad link (the
+protocol has no checksums), so faults must stop a transfer cleanly.
 """
 import os
 import random
@@ -68,7 +68,7 @@ def build_radio():
 
 
 def connect(flash, seed):
-    radio = fake.FakeRadio(flash, fake.LOSSY, seed=seed)
+    radio = fake.FakeRadio(flash, fake.CLEAN, seed=seed)
     r = drv.DM32UV(radio)
     r.status_fn = lambda s: None
     return r, radio
@@ -83,7 +83,7 @@ def download(flash, seed):
 
 
 def upload(r, flash, seed, **fault):
-    radio = fake.FakeRadio(flash, fake.LOSSY, seed=seed)
+    radio = fake.FakeRadio(flash, fake.CLEAN, seed=seed)
     for k, v in fault.items():
         setattr(radio, k, v)
     r.pipe = radio
@@ -91,6 +91,21 @@ def upload(r, flash, seed, **fault):
     radio.close()
     assert not radio.violations, radio.violations
     return n, [e for e in radio.log if e[0] == 'W'], radio
+
+
+def upload_fails(r, flash, seed, **fault):
+    """Upload with a fault injected; it must stop with a RadioError."""
+    radio = fake.FakeRadio(flash, fake.CLEAN, seed=seed)
+    for k, v in fault.items():
+        setattr(radio, k, v)
+    r.pipe = radio
+    try:
+        drv.do_upload(r)
+    except errors.RadioError as e:
+        radio.close()
+        assert not radio.violations, radio.violations
+        return str(e), [e for e in radio.log if e[0] == 'W']
+    raise AssertionError('upload with %r succeeded' % fault)
 
 
 def edit(r, number, **fields):
@@ -138,12 +153,13 @@ assert r2.get_memory(3).freq == 439000000 and r2.get_memory(2).rtone == 88.5
 print('OK: edits written to 2 pages (one newly allocated), nothing else touched')
 
 # 4. A byte corrupted on its way into flash is caught by the read-back and
-#    the page is written again.
+#    stops the upload; uploading again puts it right.
 edit(r2, 2, name='Bravo 2')
-n, writes, _ = upload(r2, flash, 5, corrupt_writes=1)
-assert n == 1 and len(writes) == 2, writes
-assert names(download(flash, 6), (2,)) == ['Bravo 2']
-print('OK: corrupted write detected by read-back and repeated')
+err, writes = upload_fails(r2, flash, 5, corrupt_writes=1)
+assert 'did not read back' in err and len(writes) == 1, (err, writes)
+n, writes, _ = upload(r2, flash, 6)
+assert n == 1 and names(download(flash, 7), (2,)) == ['Bravo 2']
+print('OK: corrupted write stops the upload; a second upload fixes it')
 
 # 5. Two pages with the same channel tag: refuse before writing anything.
 dup = bytearray(flash)
@@ -173,7 +189,7 @@ print('OK: write guard refuses unaligned, short, out-of-range and 0x02/0x69 page
 # 7. CHIRP's upload entry point (sync_out) runs the same verified upload.
 r3 = download(flash, 8)
 edit(r3, 90, name='Via sync_out')
-radio = fake.FakeRadio(flash, fake.LOSSY, seed=9)
+radio = fake.FakeRadio(flash, fake.CLEAN, seed=9)
 r3.pipe = radio
 r3.sync_out()
 radio.close()
@@ -525,10 +541,10 @@ print('OK: keys, colours, GPS, DMR timing and menu items uploaded and read back'
 #     radios (also over the lossy link); an untested firmware only warns.
 import logging  # noqa: E402
 for seed in range(60, 66):
-    assert drv.DM32UV.detect_from_serial(fake.FakeRadio(flash, fake.LOSSY, seed=seed)) \
+    assert drv.DM32UV.detect_from_serial(fake.FakeRadio(flash, fake.CLEAN, seed=seed)) \
         is drv.DM32UV
 for probe in ('detect', 'download'):
-    other = fake.FakeRadio(flash, fake.LOSSY, seed=66, model=b'UV17PRO')
+    other = fake.FakeRadio(flash, fake.CLEAN, seed=66, model=b'UV17PRO')
     try:
         if probe == 'detect':
             drv.DM32UV.detect_from_serial(other)
@@ -544,7 +560,7 @@ warnings = []
 handler = logging.Handler()
 handler.emit = lambda rec: warnings.append(rec.getMessage())
 drv.LOG.addHandler(handler)
-newer = fake.FakeRadio(flash, fake.LOSSY, seed=67, firmware=b'DM32.01.01.048')
+newer = fake.FakeRadio(flash, fake.CLEAN, seed=67, firmware=b'DM32.01.01.048')
 r = drv.DM32UV(newer)
 r.status_fn = lambda s: None
 r.sync_in()
@@ -588,15 +604,16 @@ upload(r, flash25, 71)
 assert download(flash25, 72).get_memory(90).empty, 'emptied page not uploaded'
 print('OK: a channel page emptied by deleting its channels is uploaded')
 
-# 26. A lost W acknowledgement: the radio ends the session after 2 s of
-#     silence; the driver reconnects, checks the page and carries on.
+# 26. A lost W acknowledgement stops the upload after that one write;
+#     uploading again finishes it.
 r = download(flash25, 73)
 edit(r, 1, name='After lost ACK')
 edit(r, 200, name='Second page')
-n, writes, radio = upload(r, flash25, 74, drop_acks=1)
-assert radio.sessions == 1, radio.sessions
-assert names(download(flash25, 75), (1, 200)) == ['After lost ACK', 'Second page']
-print('OK: lost write ACK: reconnected and finished the upload')
+err, writes = upload_fails(r, flash25, 74, drop_acks=1)
+assert 'no acknowledgement' in err and len(writes) == 1, (err, writes)
+upload(r, flash25, 75)
+assert names(download(flash25, 76), (1, 200)) == ['After lost ACK', 'Second page']
+print('OK: lost write ACK stops the upload; a second upload finishes it')
 
 # 27. Passwords: CHIRP can't enter one, so a write password stops an upload
 #     before any W, and a read password stops a download.
@@ -605,7 +622,7 @@ SP25 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
 flash25[SP25 + 0x439] = 0xA5                            # write password on
 r = download(flash25, 76)                               # reading is allowed
 edit(r, 1, name='Not written')
-radio = fake.FakeRadio(flash25, fake.LOSSY, seed=77)
+radio = fake.FakeRadio(flash25, fake.CLEAN, seed=77)
 r.pipe = radio
 try:
     drv.do_upload(r)
@@ -975,3 +992,46 @@ try:
 finally:
     list_ports.comports = real_comports
 print('OK: a corrupting CH340 cable stops the transfer with cable advice')
+
+
+# 37. A reply cut short stops the transfer with an error; nothing is retried.
+radio = fake.FakeRadio(flash35, dict(bit7=0, other=0, drop=1.0), seed=103)
+r37 = drv.DM32UV(radio)
+r37.status_fn = lambda s: None
+try:
+    r37.sync_in()
+    raise AssertionError('download over a link that cuts replies succeeded')
+except errors.RadioError as e:
+    assert 'Bad reply to radio info query' in str(e), e
+assert not [x for x in radio.log if x[0] == 'R'], 'went on reading after it'
+print('OK: a short reply stops the download at once')
+
+# 38. The radio may ignore the first PSEARCH or two; the handshake (and only
+#     the handshake) asks again.
+radio = fake.FakeRadio(flash35, fake.CLEAN, seed=104)
+radio.ignore_psearch = 2
+r38 = drv.DM32UV(radio)
+r38.status_fn = lambda s: None
+r38.sync_in()
+assert r38._count() > 0
+print('OK: a radio that ignores the first PSEARCHes is still found')
+
+# 39. The fixed addresses in MEM_FORMAT agree with the image slots that
+#     download fills (one slot per tag in IMAGE_TAGS order).
+probe = drv.DM32UV(memmap.MemoryMapBytes(b'\x00' * drv.DM32UV._memsize))
+checks = [(0x04, 0x000, lambda o: o.set_power.poweron_type),
+          (0x04, 0x301, lambda o: o.set_aprs.send_interval),
+          (0x04, 0x500, lambda o: o.set_menu.get_raw()[0]),
+          (0x03, 0x001, lambda o: o.tt_encode_count),
+          (0x03, 0x730, lambda o: o.fivetone.self_id[0]),
+          (0x06, 0x1FF, lambda o: o.dtmf_contact_count),
+          (0x12, 0x000, lambda o: o.ch_count.get_raw()[0]),
+          (0x13, 0x000, lambda o: o.page1[0].name.get_raw()[0]),
+          (0x41, 0xF9F, lambda o: o.vfo0.name.get_raw()[0]),
+          (0x5C, 0x000, lambda o: o.zone_hdr.count),
+          (0x64, 0x000, lambda o: o.zpage8[0].name.get_raw()[0])]
+for i, (tag, off, get) in enumerate(checks, 1):
+    probe._mmap.set(drv.IMAGE_TAGS.index(tag) * PAGE + off, bytes([i]))
+    probe.process_mmap()
+    assert int(get(probe._memobj)) == i, (hex(tag), hex(off))
+print('OK: MEM_FORMAT addresses match the image slots')

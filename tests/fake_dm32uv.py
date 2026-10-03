@@ -62,6 +62,7 @@ class FakeRadio:
         self.violations = []
         self.corrupt_writes = 0  # corrupt one data byte of the next N writes
         self.drop_acks = 0       # send no ACK for the next N writes
+        self.ignore_psearch = 0  # ignore the next N PSEARCH, as the radio can
         self.resets = 0
         self.sessions = 0        # sessions ended by silence
         _LIVE[:] = [self]
@@ -128,6 +129,9 @@ class FakeRadio:
     def _frame(self, b):
         st = self.state
         if st == 'top':
+            if b.startswith(b'PSEARCH') and self.ignore_psearch:
+                self.ignore_psearch -= 1
+                return 7
             for cmd, rep in ((b'PSEARCH', b'\x06' + self.model),
                              (b'PASSSTA', b'P' + self._password_flags()),
                              (b'SYSINFO', b'\x06')):

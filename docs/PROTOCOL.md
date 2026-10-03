@@ -76,8 +76,8 @@ bit errors.)
 cable, not the radio. With an FTDI FT231X cable on the same radio, 50 info queries (3200
 bytes) and a full read (1181 commands, 2.16 MB) had no errors at all, and a download by the
 driver reading each block once matched the three-copy dump in every page. The driver
-therefore reads each block once (retrying only short or malformed replies), and warns when
-the cable is a CH340 (USB ID 1a86:7523).
+therefore reads each block once and stops on any bad reply (only PSEARCH is repeated, as the
+vendor CPS does), and warns when the cable is a CH340 (USB ID 1a86:7523).
 
 With the CH340 cable (rev 2.64, Linux `ch341`), received bytes had bit 7 flipped from 0 to 1,
 never anything else and never in the PC-to-radio direction. The rate varied from 1 in 1000 or
