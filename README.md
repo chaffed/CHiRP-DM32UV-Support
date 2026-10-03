@@ -17,8 +17,9 @@ cable with a K-type (2-pin Kenwood) plug.
 
 > **Use a cable with an FTDI or CP2102 chip.** The CH340-based cable that comes with many of
 > these radios can corrupt data from the radio: on the tested radio it got 1 byte in 700 to 1
-> in 50 wrong, while an FTDI cable read 2 MB without a single error. The driver warns when it
-> sees a CH340 cable, and stops with an error rather than using data it can tell is garbled.
+> in 50 wrong, while an FTDI cable (a BTECH PC03) read 2 MB without a single error. The
+> driver warns when it sees a CH340 cable, and stops with an error rather than using data it
+> can tell is garbled.
 
 1. **Download the driver file**
    [`baofeng_dm32uv.py`](https://raw.githubusercontent.com/chaffed/CHiRP-DM32UV-Support/main/driver/baofeng_dm32uv.py):

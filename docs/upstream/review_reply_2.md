@@ -25,7 +25,8 @@ fills.
 
 ## Retries: "are you ever seeing this happen?" (thread 4174619799)
 
-No. With the FTDI cable, a full read had 0 of 1,125 block reads that needed a retry.
+No. With the new cable (a BTECH PC03, which has an FTDI FT231X), a full read had 0 of
+1,125 block reads that needed a retry.
 
 So in e8f1458 the recovery code is gone:
 
