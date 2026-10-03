@@ -16,7 +16,7 @@ gone and the fields are plain `ul16 rxtone/txtone`.
 
 ## Static memory format (thread 4116270468)
 
-Agreed, done in e8f1458: `MEM_FORMAT` is now one static string with the slot addresses
+Understood and done in e8f1458: `MEM_FORMAT` is now one static string with the slot addresses
 written out, like the other drivers. The layout is unchanged (the test image is
 byte-identical), and a test checks the addresses still line up with the slots download
 fills.
