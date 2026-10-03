@@ -12,8 +12,13 @@ the tools and notes used to build it.
 ## Use it in CHIRP now
 
 You need CHIRP (the current "next" build from
-[chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download)) and the
-programming cable that came with the radio.
+[chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download)) and a programming
+cable with a K-type (2-pin Kenwood) plug.
+
+> **Use a cable with an FTDI or CP2102 chip.** The CH340-based cable that comes with many of
+> these radios can corrupt data from the radio: on the tested radio it got 1 byte in 700 to 1
+> in 50 wrong, while an FTDI cable read 2 MB without a single error. The driver warns when it
+> sees a CH340 cable, and stops with an error rather than using data it can tell is garbled.
 
 1. **Download the driver file**
    [`baofeng_dm32uv.py`](https://raw.githubusercontent.com/chaffed/CHiRP-DM32UV-Support/main/driver/baofeng_dm32uv.py):
@@ -51,9 +56,10 @@ message before transferring anything.
   a read or write password. Remove it with the vendor software first.
 - **Your image files hold personal data** (radio ID, contacts, and any passwords in clear
   text). Don't attach an image from your own radio to a public bug report.
-- **Cable:** the usual cable has a CH340 chip. On Linux it appears as `/dev/ttyUSB0`; add
-  yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log out and
-  back in). On macOS, Apple's built-in driver may not work; WCH's CH34x driver may help.
+- **Cable:** see the note above; prefer FTDI or CP2102. On Linux the cable appears as
+  `/dev/ttyUSB0`; add yourself to the `dialout` group (`sudo usermod -aG dialout $USER`,
+  then log out and back in). On macOS, Apple's built-in driver doesn't work with CH340
+  cables.
 - **Other firmware versions** haven't been tested; the driver logs a warning if yours isn't
   DM32.01.01.047. Save a backup first, and please report how it went in
   [issue #11840](https://chirpmyradio.com/issues/11840).
@@ -84,20 +90,22 @@ radio back (only the expected bytes changed) and on the radio's own display.
 
 1. **Protocol, from the vendor software.** The Windows programming software (CPS v1.60)
    was taken apart with Ghidra to learn the serial protocol and the "tagged page" layout.
-2. **First contact with the radio.** The reads turned out to be unreliable: the cable flips
-   one bit in about 1 byte in 1000. The vendor software doesn't check for errors at all, so the
-   tools read every block three times and merge the copies. Reads became byte-for-byte
-   repeatable.
+2. **First contact with the radio.** The reads turned out to be unreliable: about 1 byte in
+   1000 came back with bit 7 set. The vendor software doesn't check for errors at all, so the
+   tools read every block three times and merged the copies. Much later (after the CHIRP
+   maintainer rightly questioned this) a second cable showed the cause: the CH340 cable.
+   With an FTDI cable the link is clean, and the driver now reads each block once.
 3. **Mapping the data.** Each field was found in two ways: from the CPS's own code for each
    field (offsets, bit masks, value lists, labels), and by changing one setting on the radio,
    reading it back and diffing. Channels, zones, contacts, RX groups and radio IDs are
    documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 4. **The radio's firmware.** The firmware update file turned out to be unencrypted C-SKY code.
    Reading its programming handler showed exactly how writes work (sector erase, no
-   verification), and that the cable only corrupts data coming *from* the radio. This set the
-   rules the upload follows.
+   verification), and that the cable only corrupted data coming *from* the radio. This set
+   the rules the upload follows.
 5. **A simulated radio.** [`tests/fake_dm32uv.py`](tests/fake_dm32uv.py) behaves like the
-   firmware, including the noisy link and injected write errors. Every upload feature was
+   firmware, including lossy and corrupting links and injected write errors. Every upload
+   feature was
    developed against it before touching the real radio.
 6. **Careful first writes.** A full backup, then a write that rewrote a page with its own
    contents, then one renamed channel, each checked by a full re-read. Only then was upload
@@ -114,9 +122,9 @@ The radio keeps its codeplug in 4 KB flash pages. The last byte of each page is 
 what the page holds, and the radio moves pages around as it rewrites them. The driver scans
 the tags and keeps a fixed "logical" image, one slot per tag.
 
-The programming cable tested here corrupts about 1 byte in 1000 on the way back from the
-radio, and the protocol has no checksums, so every block is read three times and the copies
-are merged byte by byte.
+The protocol has no checksums, so the link must be sound: replies that are short or carry the
+wrong header are asked for again, and a page tag that can't be right stops the transfer. With
+a good cable (FTDI, CP2102) this is all it needs.
 
 For writing, the radio's firmware erases a whole 4 KB sector on each page write. So the driver
 only ever writes whole, aligned pages, reads each one back, and never touches pages that look

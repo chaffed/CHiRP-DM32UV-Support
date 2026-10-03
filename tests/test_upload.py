@@ -1,8 +1,9 @@
 """Test the driver's upload against the simulated radio (fake_dm32uv.py).
 
-Every scenario runs over the noisy link. The simulator records anything
-the firmware analysis says we must never do (unsafe W, S, touching tags
-0x02/0x69), and every scenario checks that list is empty.
+Every scenario runs over a link that cuts replies short now and then. The
+simulator records anything the firmware analysis says we must never do
+(unsafe W, S, touching tags 0x02/0x69), and every scenario checks that
+list is empty.
 """
 import os
 import random
@@ -67,7 +68,7 @@ def build_radio():
 
 
 def connect(flash, seed):
-    radio = fake.FakeRadio(flash, fake.NOISY, seed=seed)
+    radio = fake.FakeRadio(flash, fake.LOSSY, seed=seed)
     r = drv.DM32UV(radio)
     r.status_fn = lambda s: None
     return r, radio
@@ -82,7 +83,7 @@ def download(flash, seed):
 
 
 def upload(r, flash, seed, **fault):
-    radio = fake.FakeRadio(flash, fake.NOISY, seed=seed)
+    radio = fake.FakeRadio(flash, fake.LOSSY, seed=seed)
     for k, v in fault.items():
         setattr(radio, k, v)
     r.pipe = radio
@@ -172,7 +173,7 @@ print('OK: write guard refuses unaligned, short, out-of-range and 0x02/0x69 page
 # 7. CHIRP's upload entry point (sync_out) runs the same verified upload.
 r3 = download(flash, 8)
 edit(r3, 90, name='Via sync_out')
-radio = fake.FakeRadio(flash, fake.NOISY, seed=9)
+radio = fake.FakeRadio(flash, fake.LOSSY, seed=9)
 r3.pipe = radio
 r3.sync_out()
 radio.close()
@@ -521,13 +522,13 @@ print('OK: keys, colours, GPS, DMR timing and menu items uploaded and read back'
 
 
 # 24. Identification: detect_from_serial accepts a DM-32UV and refuses other
-#     radios (also over the noisy link); an untested firmware only warns.
+#     radios (also over the lossy link); an untested firmware only warns.
 import logging  # noqa: E402
 for seed in range(60, 66):
-    assert drv.DM32UV.detect_from_serial(fake.FakeRadio(flash, fake.NOISY, seed=seed)) \
+    assert drv.DM32UV.detect_from_serial(fake.FakeRadio(flash, fake.LOSSY, seed=seed)) \
         is drv.DM32UV
 for probe in ('detect', 'download'):
-    other = fake.FakeRadio(flash, fake.NOISY, seed=66, model=b'UV17PRO')
+    other = fake.FakeRadio(flash, fake.LOSSY, seed=66, model=b'UV17PRO')
     try:
         if probe == 'detect':
             drv.DM32UV.detect_from_serial(other)
@@ -543,7 +544,7 @@ warnings = []
 handler = logging.Handler()
 handler.emit = lambda rec: warnings.append(rec.getMessage())
 drv.LOG.addHandler(handler)
-newer = fake.FakeRadio(flash, fake.NOISY, seed=67, firmware=b'DM32.01.01.048')
+newer = fake.FakeRadio(flash, fake.LOSSY, seed=67, firmware=b'DM32.01.01.048')
 r = drv.DM32UV(newer)
 r.status_fn = lambda s: None
 r.sync_in()
@@ -604,7 +605,7 @@ SP25 = [a for a in range(fake.CP_START, fake.CP_END, PAGE)
 flash25[SP25 + 0x439] = 0xA5                            # write password on
 r = download(flash25, 76)                               # reading is allowed
 edit(r, 1, name='Not written')
-radio = fake.FakeRadio(flash25, fake.NOISY, seed=77)
+radio = fake.FakeRadio(flash25, fake.LOSSY, seed=77)
 r.pipe = radio
 try:
     drv.do_upload(r)
@@ -930,3 +931,47 @@ assert page[0x880] == 0 and page[0x881:0x886] == bytes([1, 2, 10, 11, 12])
 assert page[0x888] == 10 and page[0x8A0:0x8A6] == b'Base\x00\xff'
 assert download(flash34, 100)._ft_special()[2]['name'] == 'Base'
 print('OK: five-tone system, BOT/EOT, message codes and special calls uploaded')
+
+
+# 35. On a sound link every block is read exactly once (no repeated copies).
+flash35, _pages35 = build_radio()
+radio = fake.FakeRadio(flash35, fake.CLEAN, seed=101)
+r = drv.DM32UV(radio)
+r.status_fn = lambda s: None
+r.sync_in()
+reads = [(a, n) for c, a, n in radio.log if c == 'R']
+assert len(reads) == len(set(reads)), 'a block was read more than once'
+assert sum(n == PAGE for _a, n in reads) == len([t for t in drv.IMAGE_TAGS
+                                                 if t in _pages35])
+print('OK: a clean link reads each block once')
+
+# 36. A cable that sets bit 7 (as some CH340 cables do) stops the transfer
+#     with an error instead of a bad image or a wrong write; with a CH340
+#     cable detected, the error says what to do about it.
+import types  # noqa: E402
+from serial.tools import list_ports  # noqa: E402
+real_comports = list_ports.comports
+list_ports.comports = lambda: [types.SimpleNamespace(
+    device='/dev/ttyUSB9', vid=0x1A86, pid=0x7523)]
+try:
+    for direction in ('download', 'upload'):
+        radio = fake.FakeRadio(flash35, dict(bit7=0.05, other=0, drop=0),
+                               seed=102)
+        radio.port = '/dev/ttyUSB9'
+        r2 = drv.DM32UV(radio) if direction == 'download' else r
+        r2.status_fn = lambda s: None
+        try:
+            if direction == 'download':
+                r2.sync_in()
+            else:
+                r2.pipe = radio
+                edit(r2, 1, name='Bad cable')
+                drv.do_upload(r2)
+            raise AssertionError('%s over a corrupting link succeeded' %
+                                 direction)
+        except errors.RadioError as e:
+            assert 'FTDI' in str(e) and 'CH340' in str(e), e
+        assert not radio.violations, radio.violations
+finally:
+    list_ports.comports = real_comports
+print('OK: a corrupting CH340 cable stops the transfer with cable advice')

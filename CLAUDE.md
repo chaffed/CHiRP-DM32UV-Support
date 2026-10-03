@@ -42,17 +42,18 @@ as `Fixes #NNNN`.
 - Protocol, page layout and the full channel record are documented in
   `docs/PROTOCOL.md`: from the CPS (Ghidra, `re/`) plus keypad tests on the radio
   (change one thing, read, `tools/dm32uv_diff.py`).
-- Development is on a Debian laptop: CH340 cable on `/dev/ttyUSB0` with the
-  `ch341` driver, user in `dialout`, Python venv in `.venv` (pyserial, tox,
+- Development is on a Debian laptop: FTDI cable on `/dev/ttyUSB0` (`ftdi_sio`; the
+  first cable was a CH340, `ch341`), user in `dialout`, Python venv in `.venv` (pyserial, tox,
   CHIRP installed editable from `../chirp`, a clone of kk7ds/chirp). Ghidra
   12.1.4 in `~/ghidra_12.1.4_PUBLIC`. The extracted CPS installer is in the
   project folder (gitignored); `DMR CPS.exe` is file `16`, the English UI
   text is file `10`.
-- **The serial link is unreliable**: about 1 received byte in 1000 has bit 7
-  flipped 0→1. The vendor CPS has no error handling either. Every read is
-  done 3 times and the copies are merged byte by byte. Writes will need
-  read-back verification. Never send anything at a baud rate other than 115200: the radio
-  hangs until power-cycled. After a normal session no power cycle is needed: the radio
+- **Use the FTDI cable** (FT231X, 0403:6015, `/dev/ttyUSB0`). The bit-7 errors of the
+  first cable (CH340, 1 byte in 700 to 1 in 47) were the cable: the FTDI cable read 2 MB
+  without an error (2026-10-02). Since then the driver reads each block once, retries only
+  short/malformed replies, rejects implausible page tags and non-ASCII model IDs, and warns
+  about CH340 cables; writes are still read back. Never send anything at a baud rate other
+  than 115200: the radio hangs until power-cycled. After a normal session no power cycle is needed: the radio
   ends the session after 2 s idle and returns to its home screen by itself.
 - **CHIRP driver works, download and upload** (`driver/baofeng_dm32uv.py`): a real
   download matched the read tool's dump byte for byte; upload writes only changed

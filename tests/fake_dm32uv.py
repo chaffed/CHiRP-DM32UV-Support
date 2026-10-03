@@ -33,6 +33,11 @@ def virtual_sleep(seconds):
 
 
 CLEAN = dict(bit7=0, other=0, drop=0)
+# Replies cut short, as on a congested USB link: the driver must notice
+# and ask again.
+LOSSY = dict(bit7=0, other=0, drop=0.01)
+# The fault of some CH340 cables (bit 7 set on received bytes), plus rarer
+# flips; the read tool must still cope, the driver must not pretend to.
 NOISY = dict(bit7=0.002,    # the fault seen on the real link
              other=0.0002,  # a different bit flipped: not seen yet, must still be caught
              drop=0.01)     # R/V reply cut short

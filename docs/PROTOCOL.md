@@ -70,31 +70,24 @@ Real `V 00 00 40 0D` payload (64 bytes): `03 4e 2d`, then zeros, with `3f` at
 offset 0x20. Meaning unknown. (Stray `80` bytes seen at other offsets were link
 bit errors.)
 
-### Serial link reliability (2026-09-26, CH340 cable, Linux)
+### Serial link reliability: it was the cable
 
-The link is **not clean**. Received bytes sometimes have bit 7 flipped from 0
-to 1 (about 1 byte in 1000; 4 flips in 3400 bytes). All errors observed so far
-are this one kind. That fits a small baud rate mismatch (the radio's UART
-slightly fast), but a bad cable or plug contact is not ruled out. The protocol has no
-known checksum, so:
+**Summary (2026-10-02):** the received-byte errors came from the CH340-based programming
+cable, not the radio. With an FTDI FT231X cable on the same radio, 50 info queries (3200
+bytes) and a full read (1181 commands, 2.16 MB) had no errors at all, and a download by the
+driver reading each block once matched the three-copy dump in every page. The driver
+therefore reads each block once (retrying only short or malformed replies), and warns when
+the cable is a CH340 (USB ID 1a86:7523).
 
-- Reads must be checked (read twice and compare, or read until two copies agree).
-- **Writes must not be attempted until the link is reliable**, because a
-  corrupted byte in a `W` block would go straight into the codeplug.
-
-The error rate varies between sessions: 0 in 1700 bytes, 3 in 3400, 16 in 8500.
-Reseating the plug and power cycling made no difference.
-
-Other baud rates are worse, not better. The CH340's nearest rates are 116505
-(+1.1%), 117647 and 114286: at 116505 the handshake is already garbled, and
-at 117647 about half the replies are missing. So the errors at 115200 are
-probably not a steady baud mismatch. Noise, or timing jitter on the radio side,
-are still candidates.
+With the CH340 cable (rev 2.64, Linux `ch341`), received bytes had bit 7 flipped from 0 to 1,
+never anything else and never in the PC-to-radio direction. The rate varied from 1 in 1000 or
+so (2026-09-26) to 1 in 47 (2026-09-27). That's a sampling-time error at the end of each
+byte, so most likely the cable's clock (CH340 variants without a crystal) against the radio's.
+Rates near 115200 didn't help: the CH340's nearest rates (116505, 117647, 114286) garbled the
+handshake or lost replies.
 
 **The radio stops answering and needs a power cycle** after it receives garbled
-commands (wrong baud rate). It also happened once after back-to-back sessions
-at 115200. Waiting 5 s between sessions has been enough so far.
-**Do not send it anything at a baud rate other than 115200.**
+commands (wrong baud rate). **Do not send it anything at a baud rate other than 115200.**
 
 ## Block commands
 
