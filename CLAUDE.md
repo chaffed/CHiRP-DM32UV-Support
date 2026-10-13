@@ -52,7 +52,7 @@ as `Fixes #NNNN`.
   first cable (CH340, 1 byte in 700 to 1 in 47) were the cable: the FTDI cable read 2 MB
   without an error (2026-10-02). Since then the driver reads each block once and treats any
   bad reply as an error (no retries except PSEARCH, at the maintainer's request), rejects
-  implausible page tags and non-ASCII model IDs, and warns about CH340 cables; each write
+  implausible page tags and non-ASCII model IDs with cable advice (no USB-ID check, per kk7ds); each write
   is read back once and a mismatch stops the upload. Never send anything at a baud rate other
   than 115200: the radio hangs until power-cycled. After a normal session no power cycle is needed: the radio
   ends the session after 2 s idle and returns to its home screen by itself.

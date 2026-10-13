@@ -33,7 +33,8 @@ a bad link: apart from the PSEARCH handshake, any bad or missing reply
 stops the transfer, and the link must be sound. Some CH340-based
 programming cables are not: they flip bit 7 of received bytes (1 in 700
 to 1 in 50 on the tested cable), while an FTDI cable on the same radio
-read 2 MB without an error. The driver warns when it sees a CH340 cable.
+read 2 MB without an error. A reply that is visibly garbled (a page tag
+or model ID with bit 7 set) stops the transfer with advice about the cable.
 """
 
 import collections
@@ -102,9 +103,7 @@ SCAN_TX_MODES = ['Current Channel', 'Last Active Channel',    # [ScanTxMode]
 # options of the radio's factory scan lists; bytes 3-4 = designed channel
 SCAN_DEFAULT_OPTS = bytes.fromhex('030600010000000000' '0a007f')
 
-# USB IDs of CH340 serial chips: cables with them have corrupted data from
-# this radio (see the module docstring).
-CH340_IDS = {(0x1A86, 0x7523), (0x1A86, 0x5523)}
+# Some CH340 cables corrupt data from this radio (see the module docstring).
 CABLE_ADVICE = ('Some CH340-based programming cables corrupt data from '
                 'this radio; a cable with an FTDI or CP2102 chip is '
                 'recommended.')
@@ -1053,32 +1052,22 @@ STEPS = [2.5, 5.0, 6.25, 10.0, 12.5, 25.0, 50.0, 100.0]
 
 # --- Serial link ------------------------------------------------------------
 
-def _is_ch340(pipe):
-    """True if `pipe` is a serial port on a CH340 USB adapter."""
-    port = getattr(pipe, 'port', None)
-    if not isinstance(port, str):
-        return False
-    try:
-        from serial.tools import list_ports
-        return any((p.vid, p.pid) in CH340_IDS
-                   for p in list_ports.comports() if p.device == port)
-    except Exception:           # no USB information on this system
-        return False
+def _garbled(message):
+    """A RadioError for a visibly corrupted reply, with cable advice."""
+    return errors.RadioError(message + '. ' + CABLE_ADVICE)
+
+
+def _bad_reply(message, got, expected):
+    """A RadioError for a reply header that isn't `expected`; with cable
+    advice if only bit 7 differs, the bad cables' signature."""
+    if len(got) == len(expected) and bytes(b & 0x7F for b in got) == expected:
+        return _garbled(message)
+    return errors.RadioError(message)
 
 
 class _Link:
     def __init__(self, pipe):
         self.pipe = pipe
-        self.ch340 = _is_ch340(pipe)
-        if self.ch340:
-            LOG.warning('CH340 programming cable on %s. %s',
-                        pipe.port, CABLE_ADVICE)
-
-    def error(self, message):
-        """A RadioError for a link failure, with cable advice if needed."""
-        if self.ch340:
-            message += '. ' + CABLE_ADVICE
-        return errors.RadioError(message)
 
     def send(self, data):
         time.sleep(0.01)
@@ -1093,7 +1082,7 @@ class _Link:
         self.send(data)
         resp = self.recv(n, timeout)
         if len(resp) != n:
-            raise self.error('No reply from radio to %r' % data[:7])
+            raise errors.RadioError('No reply from radio to %r' % data[:7])
         return resp
 
     def query_v(self, cmd):
@@ -1102,7 +1091,8 @@ class _Link:
         hdr = self.recv(3)
         body = self.recv(hdr[2]) if len(hdr) == 3 else b''
         if len(hdr) != 3 or hdr[0] != 0x56 or len(body) != hdr[2]:
-            raise self.error('Bad reply to radio info query %s' % cmd.hex())
+            raise _bad_reply('Bad reply to radio info query %s' % cmd.hex(),
+                             hdr[:1], b'V')
         return body
 
     def read_block(self, addr, length, timeout=5.0):
@@ -1110,7 +1100,8 @@ class _Link:
         self.send(cmd)
         resp = self.recv(6 + length, timeout)
         if len(resp) != 6 + length or resp[:6] != b'W' + cmd[1:6]:
-            raise self.error('Bad reply reading flash at %06x' % addr)
+            raise _bad_reply('Bad reply reading flash at %06x' % addr,
+                             resp[:6], b'W' + cmd[1:6])
         return resp[6:]
 
 
@@ -1132,7 +1123,7 @@ def _search(link):
                 return resp[1:]
             garbled = True          # the model ID is ASCII text
     if garbled:
-        raise link.error('Garbled reply from the radio')
+        raise _garbled('Garbled reply from the radio')
     raise errors.RadioError('Radio did not respond. Is it switched on '
                             'and connected?')
 
@@ -1154,7 +1145,7 @@ def _identify(link, writing=False):
     # the password. CHIRP can't ask, so the driver refuses instead.
     resp = link.xfer(b'PASSSTA', 3)
     if resp[0] != ord('P'):
-        raise link.error('Unexpected reply to PASSSTA')
+        raise errors.RadioError('Unexpected reply to PASSSTA')
     if resp[2] == PASSWORD_SET:
         raise errors.RadioError(
             'The radio has a read password. CHIRP cannot enter passwords; '
@@ -1164,7 +1155,7 @@ def _identify(link, writing=False):
             'The radio has a write password. CHIRP cannot enter passwords; '
             'remove it with the vendor programming software first')
     if link.xfer(b'SYSINFO', 1) != b'\x06':
-        raise link.error('Radio refused SYSINFO')
+        raise errors.RadioError('Radio refused SYSINFO')
     link.query_v(b'V\x00\x00\x40\x0D')
     info = {}
     for i in range(1, 17):
@@ -1183,13 +1174,13 @@ def _identify(link, writing=False):
 
 def _enter_program(link):
     if link.xfer(b'G\x00\x00\x00\x00\x01', 0x106)[0] != ord('S'):
-        raise link.error('Unexpected reply to G')
+        raise errors.RadioError('Unexpected reply to G')
     link.send(b'\xFF\xFF\xFF\xFF\x0C')
     if link.xfer(b'PROGRAM', 1) != b'\x06':
-        raise link.error('Radio refused programming mode')
+        raise errors.RadioError('Radio refused programming mode')
     link.xfer(b'\x02', 8)
     if link.xfer(b'\x06', 1) != b'\x06':
-        raise link.error('Radio did not acknowledge')
+        raise errors.RadioError('Radio did not acknowledge')
 
 
 def _scan(link, start, end, radio, status):
@@ -1201,7 +1192,7 @@ def _scan(link, start, end, radio, status):
         if 0x80 <= tag < 0xFF:
             # No page tag has bit 7 set (they go up to 0x7c); a bad cable
             # sets it, which would make a page look missing.
-            raise link.error('Implausible page tag %02x at %06x' % (
+            raise _garbled('Implausible page tag %02x at %06x' % (
                 tag, addr))
         where[tag].append(addr)
         status.cur = i
@@ -1250,7 +1241,7 @@ def _write_page(link, addr, data, start, end):
               bytes(data))
     ack = link.recv(1, timeout=5.0)
     if ack != b'\x06' or link.read_block(addr, PAGE) != bytes(data):
-        raise link.error(
+        raise errors.RadioError(
             'Writing the page at %06x failed (%s). Upload again, or restore '
             'the backup CHIRP saved before the upload' % (
                 addr, 'no acknowledgement' if ack != b'\x06' else

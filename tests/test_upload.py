@@ -963,35 +963,26 @@ assert sum(n == PAGE for _a, n in reads) == len([t for t in drv.IMAGE_TAGS
 print('OK: a clean link reads each block once')
 
 # 36. A cable that sets bit 7 (as some CH340 cables do) stops the transfer
-#     with an error instead of a bad image or a wrong write; with a CH340
-#     cable detected, the error says what to do about it.
-import types  # noqa: E402
-from serial.tools import list_ports  # noqa: E402
-real_comports = list_ports.comports
-list_ports.comports = lambda: [types.SimpleNamespace(
-    device='/dev/ttyUSB9', vid=0x1A86, pid=0x7523)]
-try:
-    for direction in ('download', 'upload'):
-        radio = fake.FakeRadio(flash35, dict(bit7=0.05, other=0, drop=0),
-                               seed=102)
-        radio.port = '/dev/ttyUSB9'
-        r2 = drv.DM32UV(radio) if direction == 'download' else r
-        r2.status_fn = lambda s: None
-        try:
-            if direction == 'download':
-                r2.sync_in()
-            else:
-                r2.pipe = radio
-                edit(r2, 1, name='Bad cable')
-                drv.do_upload(r2)
-            raise AssertionError('%s over a corrupting link succeeded' %
-                                 direction)
-        except errors.RadioError as e:
-            assert 'FTDI' in str(e) and 'CH340' in str(e), e
-        assert not radio.violations, radio.violations
-finally:
-    list_ports.comports = real_comports
-print('OK: a corrupting CH340 cable stops the transfer with cable advice')
+#     with an error, saying what to do about it, instead of a bad image or
+#     a wrong write. The port itself isn't inspected.
+for direction in ('download', 'upload'):
+    radio = fake.FakeRadio(flash35, dict(bit7=0.05, other=0, drop=0),
+                           seed=102)
+    r2 = drv.DM32UV(radio) if direction == 'download' else r
+    r2.status_fn = lambda s: None
+    try:
+        if direction == 'download':
+            r2.sync_in()
+        else:
+            r2.pipe = radio
+            edit(r2, 1, name='Bad cable')
+            drv.do_upload(r2)
+        raise AssertionError('%s over a corrupting link succeeded' %
+                             direction)
+    except errors.RadioError as e:
+        assert 'FTDI' in str(e) and 'CH340' in str(e), e
+    assert not radio.violations, radio.violations
+print('OK: a corrupting cable stops the transfer with cable advice')
 
 
 # 37. A reply cut short stops the transfer with an error; nothing is retried.
