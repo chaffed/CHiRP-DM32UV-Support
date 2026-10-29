@@ -5,7 +5,9 @@ from the byte stream; W erases the sector first when the address is 4 KB
 aligned and erases the next sector if the data crosses into it; flash
 programming can only clear bits; S/G use a separate memory; a session ends
 when the host is silent for 2 s: tests route time.sleep to virtual_sleep()
-so the driver's waits count, and close() ends it too. PASSSTA reports the
+and time.monotonic to virtual_monotonic() so the driver's waits count, and
+close() ends it too. A read that comes up short takes the port's timeout
+of virtual time, as on a real port. PASSSTA reports the
 password flags from the settings page (tag 0x04, bytes 0x439/0x43A).
 
 Anything our tools must never do is recorded in `violations`: a W that is
@@ -24,12 +26,19 @@ PROTECTED_TAGS = (0x02, 0x69)
 
 SESSION_IDLE = 2.0            # seconds of silence that end a session
 _LIVE = []                    # the radio most recently connected
+_CLOCK = [0.0]                # virtual time, in seconds
 
 
 def virtual_sleep(seconds):
     """Stand-in for time.sleep: silence on the line, as the radio sees it."""
+    _CLOCK[0] += seconds
     if _LIVE:
         _LIVE[-1].idle(seconds)
+
+
+def virtual_monotonic():
+    """Stand-in for time.monotonic."""
+    return _CLOCK[0]
 
 
 CLEAN = dict(bit7=0, other=0, drop=0)
@@ -56,7 +65,9 @@ class FakeRadio:
         self.out = b''
         self.inbuf = b''
         self.state = 'top'
-        self.timeout = 0.5
+        self._timeout = 0.25          # as CHIRP opens the port
+        self.timeout_changes = 0      # reconfigures the port on Windows
+        self.max_read = None          # bytes per read, like a USB packet
         self.dtr = self.rts = True
         self.log = []            # (cmd, addr, length) of every frame handled
         self.violations = []
@@ -71,8 +82,20 @@ class FakeRadio:
     def reset_input_buffer(self):
         self.out = b''
 
+    @property
+    def timeout(self):
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        self._timeout = value
+        self.timeout_changes += 1
+
     def read(self, n):
-        d, self.out = self.out[:n], self.out[n:]
+        k = n if self.max_read is None else min(n, self.max_read)
+        d, self.out = self.out[:k], self.out[k:]
+        if len(d) < k:              # the port waited for its timeout
+            _CLOCK[0] += self._timeout
         return d
 
     def write(self, d):

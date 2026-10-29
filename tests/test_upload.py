@@ -19,6 +19,7 @@ from chirp import chirp_common, errors, memmap  # noqa: E402
 from chirp import settings as chirp_settings  # noqa: E402
 
 time.sleep = fake.virtual_sleep
+time.monotonic = fake.virtual_monotonic
 PAGE = drv.PAGE
 
 
@@ -1026,3 +1027,24 @@ for i, (tag, off, get) in enumerate(checks, 1):
     probe.process_mmap()
     assert int(get(probe._memobj)) == i, (hex(tag), hex(off))
 print('OK: MEM_FORMAT addresses match the image slots')
+
+
+# 40. The port's timeout is never changed during a transfer (on Windows that
+#     reconfigures the port and FTDI cables lose bytes, #12652), and replies
+#     that arrive a USB packet at a time are put back together.
+radio = fake.FakeRadio(flash35, fake.CLEAN, seed=104)
+radio.max_read = 62
+r40 = drv.DM32UV(radio)
+r40.status_fn = lambda s: None
+r40.sync_in()
+radio.close()
+whole = drv.DM32UV(fake.FakeRadio(flash35, fake.CLEAN, seed=105))
+whole.status_fn = lambda s: None
+whole.sync_in()
+assert r40.get_mmap().get_packed() == whole.get_mmap().get_packed()
+edit(r40, 1, name='Packets')
+drv.do_upload(r40)
+radio.close()
+assert radio.timeout_changes == 0, radio.timeout_changes
+assert not radio.violations, radio.violations
+print('OK: the port timeout is left alone; packetised replies reassemble')
