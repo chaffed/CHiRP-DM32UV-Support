@@ -67,7 +67,8 @@ class FakeRadio:
         self.state = 'top'
         self._timeout = 0.25          # as CHIRP opens the port
         self.timeout_changes = 0      # reconfigures the port on Windows
-        self.max_read = None          # bytes per read, like a USB packet
+        self.mid_session_changes = 0  # ... while a transfer is under way
+        self._log_at_close = 0        # frames handled before this session
         self.dtr = self.rts = True
         self.log = []            # (cmd, addr, length) of every frame handled
         self.violations = []
@@ -90,11 +91,12 @@ class FakeRadio:
     def timeout(self, value):
         self._timeout = value
         self.timeout_changes += 1
+        if len(self.log) > self._log_at_close:
+            self.mid_session_changes += 1
 
     def read(self, n):
-        k = n if self.max_read is None else min(n, self.max_read)
-        d, self.out = self.out[:k], self.out[k:]
-        if len(d) < k:              # the port waited for its timeout
+        d, self.out = self.out[:n], self.out[n:]
+        if len(d) < n:              # the port waited for its timeout
             _CLOCK[0] += self._timeout
         return d
 
@@ -114,6 +116,7 @@ class FakeRadio:
             self.state = 'top'      # 2 s idle ends the session, then a reset
             self.resets += 1
         self.inbuf = b''
+        self._log_at_close = len(self.log)
 
     # --- replies ------------------------------------------------------------
     def _reply(self, r, noisy_frame):

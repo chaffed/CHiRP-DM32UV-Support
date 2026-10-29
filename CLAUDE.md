@@ -106,7 +106,9 @@ as `Fixes #NNNN`.
    rounds (KenwoodToneModel, static memory format, no retries, no CH340 port inspection).
    Bug https://chirpmyradio.com/issues/12652 (Windows + FTDI cable, random "Bad reply"):
    the driver set the port timeout before every read, which reconfigures the port on
-   Windows. Fix (recv loops to its own deadline) is **PR #1703** (branch
+   Windows. Fix (the port timeout is set once per transfer, `LINK_TIMEOUT` = 5 s, and
+   each reply is one `read(n)`; kk7ds asked for this instead of a read loop) is **PR
+   #1703** (branch
    `dm32uv-port-timeout`, "Related to", not "Fixes", until the reporter confirms; CI green).
    The reply for the bug is in `docs/upstream/issue_12652.md`; the user posts it.
    New fixes go on new branches from `origin/master`.

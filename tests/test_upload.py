@@ -1029,11 +1029,10 @@ for i, (tag, off, get) in enumerate(checks, 1):
 print('OK: MEM_FORMAT addresses match the image slots')
 
 
-# 40. The port's timeout is never changed during a transfer (on Windows that
-#     reconfigures the port and FTDI cables lose bytes, #12652), and replies
-#     that arrive a USB packet at a time are put back together.
+# 40. The port's timeout is set once per transfer, before any traffic, and
+#     never during one: on Windows that reconfigures the port and FTDI
+#     cables lose bytes (#12652).
 radio = fake.FakeRadio(flash35, fake.CLEAN, seed=104)
-radio.max_read = 62
 r40 = drv.DM32UV(radio)
 r40.status_fn = lambda s: None
 r40.sync_in()
@@ -1043,11 +1042,12 @@ whole.status_fn = lambda s: None
 whole.sync_in()
 assert r40.get_mmap().get_packed() == whole.get_mmap().get_packed()
 edit(r40, 1, name='Packets')
-drv.do_upload(r40)
+r40.sync_out()
 radio.close()
-assert radio.timeout_changes == 0, radio.timeout_changes
+assert radio.timeout == drv.LINK_TIMEOUT and radio.timeout_changes == 2
+assert radio.mid_session_changes == 0, radio.mid_session_changes
 assert not radio.violations, radio.violations
-print('OK: the port timeout is left alone; packetised replies reassemble')
+print('OK: the port timeout is set once per transfer, never during one')
 
 
 # 41. Names end at the first NUL. The CPS writes them NUL-terminated and
