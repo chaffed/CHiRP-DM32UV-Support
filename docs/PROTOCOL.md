@@ -557,13 +557,71 @@ the CPS would silently accept corrupted reads and write corrupted data.
 A CHIRP driver has to add its own checks: read each block until
 two copies agree, and after a write, read the block back and compare.
 
+## Firmware upgrade protocol (CPS Tool → Firmware Upgrade, `0x423a60`)
+
+Static analysis of the CPS only (2026-10-29). **Nothing here has been sent to a radio.** The
+radio-side receiver is the bootloader, which is not in the firmware file (see "What this does
+not tell us"). Written up so the flashing process could be rebuilt as a standalone tool; CHIRP
+does not flash firmware.
+
+**Firmware file** (`DM32_L01_048_20250821.bin`, 860,416 bytes): a 256-byte header followed by
+the raw application image (860,160 bytes, linked at `0x300c000`). The header is `0xFF`-filled
+except for the model ID string at offset 0 (`BFUV32-V2`) and `END` at `0xFD..0xFF`. No
+checksum, no size field. The upgrade dialog's hidden "Generate Bin" button (`0x4236f0`, shown
+only in a factory mode) builds exactly this from a typed ID and a raw image. The header is not
+sent to the radio. (The CPS's own file check tests `E`, `N`, `D` with OR, so one matching byte
+passes.)
+
+**Link:** the same port and `[com] baudrate` from `cps.ini` as the codeplug protocol (115200
+8N1, `0x48f400`), 10 ms pause before every send. The radio must be in upgrade mode first (SK1 +
+PTT held while switching on, green LED, then plug in the cable); the application firmware is not
+running then, so none of the codeplug commands apply.
+
+**Transfer** (PC → radio / radio → PC; timeouts are the CPS's receive timeouts; any other reply
+makes the CPS abort with a message box, there are no retries):
+
+| Step | PC sends | Radio answers | Timeout | Notes |
+|---|---|---|---|---|
+| 1 | `R` | `06` | 0.5 s | |
+| 2 | `M 00 00 00 01` | `M xx len`; PC sends `06`; radio sends `len` bytes | 0.5 s each | The `len` bytes must equal the first `len` bytes of the file header (the model ID), else "model error". |
+| 3 | `E 00 00 00 00` | `06` | 0.5 s | Presumably erase; the parameters are constants in the CPS. |
+| 4 | `1` | `C` | 5 s | |
+| 5 | `01` (SOH) | `C` | 5 s | |
+| 6 | YMODEM block 0, 132 bytes: `00 FF`, file name, `00`, image size in decimal (`%d`), zero padding to 128 data bytes, CRC | `06 43` | 20 s | Size = file length − 256. The long wait suggests the erase happens here, once the size is known. |
+| 7a | per block: `02` (STX, 1 KB) or `01` (SOH, 128 B) | `C` | 10 s | 1 KB blocks while ≥ 1 KB remains, then 128-byte blocks; the last one padded with `0x1A`. |
+| 7b | block body: `seq`, `~seq`, data, `CRC_hi`, `CRC_lo` (1028 or 132 bytes) | `06` | 10 s | `seq` starts at 1 and wraps 255 → 0. |
+| 8 | `04` (EOT) | 1 byte, ignored | 5 s | The CPS then closes the port and reports "Upgrade successful!". |
+
+The CRC is CRC-16/XMODEM (`0x424ea0`: polynomial 0x1021, init 0, no reflection, no final
+XOR), big-endian, over the data bytes only (128 or 1024). Compared with standard YMODEM: the
+custom steps 1–4, the SOH/STX byte sent alone and answered with `C` before the body, and no
+closing empty block 0, NAK handling or retransmission.
+
+**What this does not tell us**
+
+- The receiver is the bootloader at `0x3000000..0x300bfff`, which is not in the firmware file,
+  so its command set is unknown: whether `M` and `E` take other parameters, whether there is a
+  read-back command (the CPS uses none, so the radio's .047 cannot be saved this way as far as
+  the CPS shows), and how the image is checked beyond the per-block CRC.
+- The stream carries no addresses; the bootloader decides where it writes. The image is linked
+  above the bootloader and the file contains no bootloader, so a normal upgrade should leave the
+  bootloader intact and a failed transfer should be recoverable by entering upgrade mode again.
+  That is an inference from the layout, not something verified.
+- "Allow Reset" (settings byte 0x1D bit 0, `allow_reset` in the driver) must be on before the
+  upgrade so the radio accepts the SK1 + SK2 reset afterwards, per Baofeng's guide. What the
+  firmware does with the bit was not analysed.
+
+**Rebuilding it:** a sender is small (pyserial and the table above). The risks: a wrong or
+interrupted image leaves the radio without a working application until a flash succeeds; a
+sender cannot be tested without flashing a radio; and there is no .047 file to flash back.
+
 ## Other routines in the CPS (not needed for CHIRP)
 
 | Function | Purpose |
 |----------|---------|
 | `0x45e530` / `0x45f6b0` / `0x45fff0` | Factory calibration page (tag 0x02 at page end in its own region) plus `AT+...` alignment. **Never write.** |
 | `0x44da70`, `0x450e10`, `0x452b20` | Call recording list and playback |
-| `0x423a60` | Firmware upgrade (bootloader protocol) |
+| `0x423a60` | Firmware upgrade; see "Firmware upgrade protocol" above |
 | `0x41d280`, `0x41fea0`, `0x42c9a0` | Voice prompt, font and boot image upload |
 | `0x405490`, `0x405a30`, … | Factory test mode (`PCTESTM`, `AT+...`) |
 
