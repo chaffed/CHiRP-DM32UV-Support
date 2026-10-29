@@ -118,6 +118,12 @@ as `Fixes #NNNN`.
    Agreed with the user: analysis first. **Nothing is sent to a radio in upgrade mode, and no
    flashing tool is written, without the user's explicit OK.** `re/ListFuncs.java` lists the
    functions in an address range (how the dialog's handlers were found).
+6. .047 vs .048 (2026-10-29, PROTOCOL.md "Firmware .048 compared with .047"): from the
+   #12652 reporter's trace and image, only the digital contact database area changed
+   (V9 gone, V15 enlarged, V16 = 150000); codeplug layout, page tags and the driver's
+   parsing are unchanged. Found and fixed on the way: names must be cut at the first NUL
+   (the CPS leaves stale bytes after it; `_cut()`, test 41). Upload on .048 not checked.
+   The reporter's image and trace are personal data: scratchpad only, never in the repo.
 
 ## Firmware notes
 

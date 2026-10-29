@@ -55,16 +55,32 @@ reliability".)
 | 6 | Flash range | `0x201000 – 0x264fff` |
 | 7 | Flash range | `0x0c9000 – 0x149fff` |
 | 8 | Flash range | `0x180000 – 0x200fff` |
-| 9 | Flash range | `0x6dc000 – 0xffffff` |
+| 9 | Flash range (recordings; gone on .048, see below) | `0x6dc000 – 0xffffff` |
 | 10 | Flash range of the **codeplug page area** | `0x001000 – 0x0c8fff` (200 pages) |
 | 11 | Version string | `C1.00.01.001` |
 | 13 | ? | empty (`n = 0`) |
 | 14 | Flash range | `0x150000 – 0x175fff` |
 | 15 | Flash range of the **digital contacts area** | `0x278000 – 0x6dbfff` |
-| 16 | `u24`. The CPS analysis suggested contacts data length in bytes (44 = 0x2C bytes per contact). | `0x00c350` = 50000. Not a multiple of 44, so it is more likely a contact count limit. |
+| 16 | `u24`, the digital contact limit | `0x00c350` = 50000 (`0x0249f0` = 150000 on .048) |
 
 The flash ranges fit together without gaps from 0x001000 to 0xffffff, except
 for 0x14a000–0x14ffff, 0x176000–0x17ffff and 0x265000–0x277fff.
+
+**Firmware .048 compared with .047 (2026-10-29).** From the serial trace and image a
+.048 radio's owner attached to chirpmyradio bug #12652 (`DM32.01.L01.048`), against our
+.047 radio's full backup. Differences: V1; V2 (`09b6` → `1737`, meaning still unknown); V9
+is `000000-000000`; V15 grew to `0x278000 – 0xffffff`, taking over the V9 area; V16 is
+150000. That matches the .048 changelog ("Expand to 150K Contacts, cancel the
+recording"): the recordings area became digital contact space. Everything the driver
+uses is unchanged: V10 (codeplug area, 200 pages), the `G` block, the 64-byte blob and
+V3–V8, V11, V14 are identical; the .048 radio has no page tag that the .047 radio lacks
+(pages only our radio has: 0x4F–0x5B, which the driver skips, and zone pages the other
+owner doesn't use); every slot the driver fills carries the expected tag; and the
+settings page differs from ours in 9 of 4096 bytes (user settings). The driver parsed
+the .048 image correctly: 38 channels, 20 contacts, 3 zones, 3 radio IDs, settings.
+Not checked on .048: uploading. The CPS leaves stale bytes after a name's NUL
+terminator (`52 Simplex\0Dv`), which the driver now cuts off; that is a CPS habit, not
+a .048 change.
 
 Real `V 00 00 40 0D` payload (64 bytes): `03 4e 2d`, then zeros, with `3f` at
 offset 0x20. Meaning unknown. (Stray `80` bytes seen at other offsets were link
@@ -426,9 +442,12 @@ and resets a pointer that would fall outside its zone.
 
 From a static look at the radio's own firmware, `DM32_L01_048_20250821.bin`
 from Baofeng's firmware download. The radio tested here runs .047. The .048 changelog says
-"Expand to 150K Contacts, cancel the recording", so the contacts layout may differ;
-**do not update the radio's firmware** while this work depends on .047. How to
-reproduce: `re/fw_disasm.sh` (needs csky-elf binutils, see the script).
+"Expand to 150K Contacts, cancel the recording"; a comparison with a real .048 radio (see
+"Firmware .048 compared with .047" above) shows that only the digital contact database
+area changed, which the driver doesn't touch. The codeplug layout is the same. Keeping
+the radio on .047 is still the choice here, because there is no .047 file to flash back
+(see "Firmware upgrade protocol"). How to reproduce the disassembly: `re/fw_disasm.sh`
+(needs csky-elf binutils, see the script).
 
 - The file is a 256-byte header (`BFUV32-V2`) followed by **unencrypted C-SKY
   (CK80x) code** linked at `0x300c000`, so there is a bootloader below. Start-up copies

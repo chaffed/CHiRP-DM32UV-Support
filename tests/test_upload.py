@@ -1048,3 +1048,18 @@ radio.close()
 assert radio.timeout_changes == 0, radio.timeout_changes
 assert not radio.violations, radio.violations
 print('OK: the port timeout is left alone; packetised replies reassemble')
+
+
+# 41. Names end at the first NUL. The CPS writes them NUL-terminated and
+#     leaves the tail of a longer, older name behind it (seen in a .048
+#     image as '52 Simplex\0Dv'), so stripping from the right isn't enough.
+r41 = download(flash, 41)
+r41._chan(1).name = '52 Simplex\x00ng nm'
+assert r41.get_memory(1).name == '52 Simplex', repr(r41.get_memory(1).name)
+bm = r41.get_bank_model()
+orig = bm.get_mappings()[0].get_name()
+r41._zone(1).name = (orig[:4] + '\x00junk').ljust(16, '\x00')
+assert bm.get_mappings()[0].get_name() == orig[:4], bm.get_mappings()[0].get_name()
+assert r41._zone_list()[0][0] == orig[:4]
+r41.get_settings()      # the zone list on the Settings tab reads names too
+print('OK: names stop at the first NUL, stale tails are dropped')

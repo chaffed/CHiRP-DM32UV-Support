@@ -1372,6 +1372,15 @@ def do_upload(radio):
 
 # --- Tones ------------------------------------------------------------------
 
+def _cut(name):
+    """A name field as the radio shows it: up to the first NUL or 0xFF.
+
+    The CPS writes names NUL-terminated and leaves whatever a longer,
+    older name had after that, so stripping from the right isn't enough
+    (seen in a .048 image: '52 Simplex\\0Dv')."""
+    return str(name).split('\x00')[0].split('\xFF')[0].rstrip(' ')
+
+
 def _shown(name):
     """A name as CHIRP can show it: characters outside its charset as '?'."""
     return ''.join(c if c in chirp_common.CHARSET_ASCII else '?'
@@ -1412,7 +1421,7 @@ class DM32UVZone(chirp_common.NamedBank):
         return self._model._radio._zone(self.index + 1)
 
     def get_name(self):
-        name = str(self._zone().name).rstrip('\x00\xFF ')
+        name = _cut(self._zone().name)
         if self.index + 1 > self._model._radio._zone_count() and (
                 not name or not name.isprintable()):
             return 'New zone'
@@ -1612,7 +1621,7 @@ class DM32UV(chirp_common.CloneModeRadio):
             raise errors.RadioError('Zones must be created in order')
         self._forget()
         zone = self._zone(z)
-        name = str(zone.name).rstrip('\x00\xFF ')
+        name = _cut(zone.name)
         if not name or not name.isprintable():
             zone.name = ('Zone %i' % z).ljust(16, '\x00')
         self._set_zone_members(z, [])
@@ -2268,7 +2277,7 @@ class DM32UV(chirp_common.CloneModeRadio):
         for n in range(1, self._count() + 1):
             _mem = self._chan(n)
             if _mem.rxfreq.get_raw() not in (b'\xFF' * 4, b'\x00' * 4):
-                names[n] = _shown(str(_mem.name).rstrip('\x00\xFF '))
+                names[n] = _shown(_cut(_mem.name))
         return names
 
     @_cached
@@ -2556,7 +2565,7 @@ class DM32UV(chirp_common.CloneModeRadio):
         else:
             chirp_common.split_to_offset(mem, mem.freq,
                                          int(_mem.txfreq) * 10)
-        mem.name = str(_mem.name).rstrip('\x00\xFF ')
+        mem.name = _cut(_mem.name)
         digital = _mem.chtype in (1, 3)
         mem.mode = 'DMR' if digital else ('FM' if _mem.wide else 'NFM')
         mem.power = POWER_LEVELS[min(int(_mem.power), 2)]
